@@ -1,0 +1,824 @@
+---
+title: Structures de contrôle
+description: Conditions, boucles et gestion du flux d'exécution en Go
+---
+
+# Structures de contrôle
+
+Go propose des structures de contrôle simples et puissantes pour gérer le flux d'exécution de vos programmes.
+
+## Conditions : if/else
+
+### Syntaxe de base
+```go
+age := 18
+
+if age >= 18 {
+    fmt.Println("Vous êtes majeur")
+} else {
+    fmt.Println("Vous êtes mineur")
+}
+```
+
+### If avec initialisation
+Go permet d'initialiser une variable dans la condition :
+
+```go
+// La variable 'age' n'existe que dans le bloc if/else
+if age := obtenirAge(); age >= 18 {
+    fmt.Println("Majeur:", age)
+} else {
+    fmt.Println("Mineur:", age)
+}
+// age n'est plus accessible ici
+```
+
+### If/else if en chaîne
+```go
+note := 85
+
+if note >= 90 {
+    fmt.Println("Excellent - A")
+} else if note >= 80 {
+    fmt.Println("Très bien - B")
+} else if note >= 70 {
+    fmt.Println("Bien - C")
+} else if note >= 60 {
+    fmt.Println("Passable - D")
+} else {
+    fmt.Println("Insuffisant - F")
+}
+```
+
+### Conditions complexes
+```go
+age := 25
+aPermis := true
+aVoiture := false
+
+// Opérateurs logiques
+if age >= 18 && aPermis {
+    fmt.Println("Peut conduire")
+}
+
+if aPermis || aVoiture {
+    fmt.Println("A au moins l'un des deux")
+}
+
+if !(age < 18) {
+    fmt.Println("N'est pas mineur")
+}
+
+// Parenthèses pour la clarté
+if (age >= 18 && aPermis) || aVoiture {
+    fmt.Println("Condition complexe satisfaite")
+}
+```
+
+## Switch : choix multiple
+
+### Switch classique
+```go
+jour := "lundi"
+
+switch jour {
+case "lundi":
+    fmt.Println("Début de semaine 😴")
+case "mardi", "mercredi", "jeudi":
+    fmt.Println("Milieu de semaine 💪")
+case "vendredi":
+    fmt.Println("Fin de semaine 🎉")
+case "samedi", "dimanche":
+    fmt.Println("Week-end 🏖️")
+default:
+    fmt.Println("Jour invalide")
+}
+```
+
+### Switch sans expression (remplace if/else if)
+```go
+age := 25
+salaire := 35000
+
+switch {
+case age < 18:
+    fmt.Println("Mineur")
+case age < 25:
+    fmt.Println("Jeune adulte")
+case age < 65 && salaire > 30000:
+    fmt.Println("Adulte avec bon salaire")
+case age >= 65:
+    fmt.Println("Senior")
+default:
+    fmt.Println("Adulte")
+}
+```
+
+### Switch avec initialisation
+```go
+switch heure := time.Now().Hour(); {
+case heure < 12:
+    fmt.Println("Bonjour !")
+case heure < 18:
+    fmt.Println("Bon après-midi !")
+default:
+    fmt.Println("Bonsoir !")
+}
+```
+
+### Switch sur type (type assertion)
+```go
+func analyserType(v interface{}) {
+    switch val := v.(type) {
+    case int:
+        fmt.Printf("Entier: %d\n", val)
+    case string:
+        fmt.Printf("Chaîne: %s (longueur: %d)\n", val, len(val))
+    case bool:
+        fmt.Printf("Booléen: %t\n", val)
+    case []int:
+        fmt.Printf("Slice d'entiers: %v\n", val)
+    case nil:
+        fmt.Println("Valeur nil")
+    default:
+        fmt.Printf("Type inconnu: %T\n", val)
+    }
+}
+
+// Utilisation
+analyserType(42)        // Entier: 42
+analyserType("hello")   // Chaîne: hello (longueur: 5)
+analyserType(true)      // Booléen: true
+```
+
+### Fallthrough (rare)
+```go
+note := 85
+
+switch {
+case note >= 90:
+    fmt.Println("Excellent")
+    fallthrough  // Continue vers le case suivant
+case note >= 80:
+    fmt.Println("Très bien")
+case note >= 70:
+    fmt.Println("Bien")
+default:
+    fmt.Println("Peut mieux faire")
+}
+// Si note = 92, affiche: "Excellent" puis "Très bien"
+```
+
+## Boucles : for
+
+Go n'a qu'une seule structure de boucle : `for`, mais elle est très versatile.
+
+### For classique (style C)
+```go
+// Boucle de 0 à 4
+for i := 0; i < 5; i++ {
+    fmt.Printf("Itération %d\n", i)
+}
+
+// Plusieurs variables
+for i, j := 0, 10; i < j; i, j = i+1, j-1 {
+    fmt.Printf("i=%d, j=%d\n", i, j)
+}
+```
+
+### For comme while
+```go
+compteur := 0
+for compteur < 5 {
+    fmt.Printf("Compteur: %d\n", compteur)
+    compteur++
+}
+
+// Lecture d'un fichier
+scanner := bufio.NewScanner(file)
+for scanner.Scan() {
+    ligne := scanner.Text()
+    fmt.Println(ligne)
+}
+```
+
+### Boucle infinie
+```go
+for {
+    fmt.Println("Boucle infinie - Ctrl+C pour arrêter")
+    time.Sleep(1 * time.Second)
+    
+    if condition {
+        break  // Sortir de la boucle
+    }
+    
+    if autreCondition {
+        continue  // Passer à l'itération suivante
+    }
+}
+```
+
+### For range : itération sur collections
+
+#### Sur slice/array
+```go
+fruits := []string{"pomme", "banane", "orange", "kiwi"}
+
+// Avec index et valeur
+for i, fruit := range fruits {
+    fmt.Printf("%d: %s\n", i, fruit)
+}
+
+// Seulement la valeur (ignore l'index)
+for _, fruit := range fruits {
+    fmt.Printf("Fruit: %s\n", fruit)
+}
+
+// Seulement l'index
+for i := range fruits {
+    fmt.Printf("Index: %d\n", i)
+}
+
+// Modification impossible directement
+for _, fruit := range fruits {
+    fruit = "modifié"  // Ne modifie PAS le slice original
+}
+
+// Pour modifier, utilisez l'index
+for i := range fruits {
+    fruits[i] = strings.ToUpper(fruits[i])
+}
+```
+
+#### Sur map
+```go
+ages := map[string]int{
+    "Alice": 25,
+    "Bob":   30,
+    "Carol": 35,
+}
+
+// Clé et valeur
+for nom, age := range ages {
+    fmt.Printf("%s a %d ans\n", nom, age)
+}
+
+// Seulement les clés
+for nom := range ages {
+    fmt.Printf("Utilisateur: %s\n", nom)
+}
+
+// Note: l'ordre d'itération n'est pas garanti !
+```
+
+#### Sur string (caractères Unicode)
+```go
+message := "Bonjour 🌍"
+
+// Itération par rune (caractère Unicode)
+for i, r := range message {
+    fmt.Printf("Position %d: %c (code: %d)\n", i, r, r)
+}
+
+// Attention: i n'est pas séquentiel avec les caractères Unicode multi-bytes
+```
+
+#### Sur channel (avancé)
+```go
+ch := make(chan int)
+
+// Dans une goroutine séparée
+go func() {
+    for i := 0; i < 5; i++ {
+        ch <- i
+    }
+    close(ch)
+}()
+
+// Lecture jusqu'à fermeture du channel
+for valeur := range ch {
+    fmt.Printf("Reçu: %d\n", valeur)
+}
+```
+
+### Break et continue
+
+#### Break simple
+```go
+for i := 0; i < 10; i++ {
+    if i == 5 {
+        break  // Sort de la boucle
+    }
+    fmt.Println(i)  // Affiche 0, 1, 2, 3, 4
+}
+```
+
+#### Continue
+```go
+for i := 0; i < 10; i++ {
+    if i%2 == 0 {
+        continue  // Passe à l'itération suivante
+    }
+    fmt.Println(i)  // Affiche seulement les nombres impairs
+}
+```
+
+#### Labels pour boucles imbriquées
+```go
+Externe:
+for i := 0; i < 3; i++ {
+    for j := 0; j < 3; j++ {
+        if i == 1 && j == 1 {
+            break Externe  // Sort des DEUX boucles
+        }
+        fmt.Printf("i=%d, j=%d\n", i, j)
+    }
+}
+
+// Continue avec label
+Boucle:
+for i := 0; i < 3; i++ {
+    for j := 0; j < 3; j++ {
+        if j == 1 {
+            continue Boucle  // Continue la boucle externe
+        }
+        fmt.Printf("i=%d, j=%d\n", i, j)
+    }
+}
+```
+
+## Gestion d'erreurs
+
+### Pattern classique if err != nil
+```go
+import (
+    "errors"
+    "fmt"
+)
+
+func diviser(a, b float64) (float64, error) {
+    if b == 0 {
+        return 0, errors.New("division par zéro impossible")
+    }
+    return a / b, nil
+}
+
+func main() {
+    resultat, err := diviser(10, 0)
+    if err != nil {
+        fmt.Printf("Erreur: %v\n", err)
+        return
+    }
+    fmt.Printf("Résultat: %.2f\n", resultat)
+}
+```
+
+### Erreurs personnalisées
+```go
+type ErreurValidation struct {
+    Champ   string
+    Valeur  interface{}
+    Message string
+}
+
+func (e *ErreurValidation) Error() string {
+    return fmt.Sprintf("erreur dans le champ '%s' (valeur: %v): %s", 
+        e.Champ, e.Valeur, e.Message)
+}
+
+func validerAge(age int) error {
+    if age < 0 {
+        return &ErreurValidation{
+            Champ:   "age",
+            Valeur:  age,
+            Message: "l'âge ne peut pas être négatif",
+        }
+    }
+    if age > 150 {
+        return &ErreurValidation{
+            Champ:   "age", 
+            Valeur:  age,
+            Message: "l'âge semble irréaliste",
+        }
+    }
+    return nil
+}
+```
+
+### Defer : exécution différée
+```go
+import "os"
+
+func traiterFichier(nomFichier string) error {
+    file, err := os.Open(nomFichier)
+    if err != nil {
+        return err
+    }
+    defer file.Close()  // Sera exécuté à la fin de la fonction
+    
+    // Traitement du fichier...
+    // Même si une erreur se produit, file.Close() sera appelé
+    
+    return nil
+}
+```
+
+#### Defer avec des ressources multiples
+```go
+func operationComplexe() error {
+    mutex.Lock()
+    defer mutex.Unlock()  // Libère le mutex automatiquement
+    
+    db, err := sql.Open("postgres", connectionString)
+    if err != nil {
+        return err
+    }
+    defer db.Close()      // Ferme la DB automatiquement
+    
+    tx, err := db.Begin()
+    if err != nil {
+        return err
+    }
+    defer func() {
+        if err != nil {
+            tx.Rollback()  // Rollback en cas d'erreur
+        } else {
+            tx.Commit()    // Commit si succès
+        }
+    }()
+    
+    // Opérations de base de données...
+    return nil
+}
+```
+
+#### Ordre d'exécution des defer
+```go
+func exempleDeferOrdre() {
+    defer fmt.Println("Premier defer")
+    defer fmt.Println("Second defer")
+    defer fmt.Println("Troisième defer")
+    
+    fmt.Println("Fonction principale")
+}
+
+// Sortie:
+// Fonction principale
+// Troisième defer
+// Second defer
+// Premier defer
+```
+
+### Panic et recover
+
+#### Panic : arrêt d'urgence
+```go
+func diviser(a, b int) int {
+    if b == 0 {
+        panic("division par zéro!")
+    }
+    return a / b
+}
+
+func main() {
+    // Cette ligne plantera le programme
+    // resultat := diviser(10, 0)
+}
+```
+
+#### Recover : récupération de panic
+```go
+func operationDangereuse() {
+    defer func() {
+        if r := recover(); r != nil {
+            fmt.Printf("Panic récupérée: %v\n", r)
+        }
+    }()
+    
+    // Code qui peut déclencher une panic
+    panic("Quelque chose s'est mal passé!")
+    
+    fmt.Println("Cette ligne ne sera jamais exécutée")
+}
+
+func main() {
+    operationDangereuse()
+    fmt.Println("Le programme continue après la panic récupérée")
+}
+```
+
+#### Pattern web server avec recover
+```go
+func recupererPanic(handler http.HandlerFunc) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        defer func() {
+            if err := recover(); err != nil {
+                log.Printf("Panic dans %s %s: %v", r.Method, r.URL, err)
+                http.Error(w, "Erreur interne du serveur", 500)
+            }
+        }()
+        
+        handler(w, r)
+    }
+}
+```
+
+## Exercices pratiques
+
+### Exercice 1 : Calculatrice avancée
+```go
+package main
+
+import (
+    "fmt"
+    "math"
+)
+
+func calculatrice() {
+    for {
+        var a, b float64
+        var operation string
+        
+        fmt.Println("\n=== Calculatrice Go ===")
+        fmt.Println("Opérations: +, -, *, /, ^, sqrt, quit")
+        
+        fmt.Print("Entrez le premier nombre (ou 'quit'): ")
+        var input string
+        fmt.Scan(&input)
+        
+        if input == "quit" {
+            fmt.Println("Au revoir!")
+            break
+        }
+        
+        fmt.Sscan(input, &a)
+        
+        fmt.Print("Entrez l'opération: ")
+        fmt.Scan(&operation)
+        
+        switch operation {
+        case "sqrt":
+            if a < 0 {
+                fmt.Println("Erreur: racine carrée d'un nombre négatif")
+                continue
+            }
+            fmt.Printf("√%.2f = %.2f\n", a, math.Sqrt(a))
+        case "+", "-", "*", "/", "^":
+            fmt.Print("Entrez le second nombre: ")
+            fmt.Scan(&b)
+            
+            switch operation {
+            case "+":
+                fmt.Printf("%.2f + %.2f = %.2f\n", a, b, a+b)
+            case "-":
+                fmt.Printf("%.2f - %.2f = %.2f\n", a, b, a-b)
+            case "*":
+                fmt.Printf("%.2f × %.2f = %.2f\n", a, b, a*b)
+            case "/":
+                if b == 0 {
+                    fmt.Println("Erreur: Division par zéro!")
+                } else {
+                    fmt.Printf("%.2f ÷ %.2f = %.2f\n", a, b, a/b)
+                }
+            case "^":
+                fmt.Printf("%.2f^%.2f = %.2f\n", a, b, math.Pow(a, b))
+            }
+        default:
+            fmt.Println("Opération non reconnue!")
+        }
+    }
+}
+```
+
+### Exercice 2 : Jeu de devinette amélioré
+```go
+package main
+
+import (
+    "fmt"
+    "math/rand"
+    "time"
+)
+
+func jeuDevinette() {
+    rand.Seed(time.Now().UnixNano())
+    nombreSecret := rand.Intn(100) + 1
+    tentatives := 0
+    maxTentatives := 7
+    
+    fmt.Println("🎯 Jeu de devinette!")
+    fmt.Printf("Devinez le nombre entre 1 et 100 (vous avez %d tentatives)\n", maxTentatives)
+    
+    for tentatives < maxTentatives {
+        var devine int
+        fmt.Printf("\nTentative %d/%d: ", tentatives+1, maxTentatives)
+        fmt.Scan(&devine)
+        tentatives++
+        
+        switch {
+        case devine == nombreSecret:
+            switch {
+            case tentatives == 1:
+                fmt.Println("🏆 Incroyable! Premier coup!")
+            case tentatives <= 3:
+                fmt.Println("🎉 Excellent! Très bon score!")
+            case tentatives <= 5:
+                fmt.Println("👍 Bien joué!")
+            default:
+                fmt.Println("✅ Trouvé!")
+            }
+            fmt.Printf("Vous avez trouvé en %d tentatives!\n", tentatives)
+            return
+            
+        case devine < nombreSecret:
+            distance := nombreSecret - devine
+            switch {
+            case distance > 30:
+                fmt.Println("❄️ Très froid! Beaucoup trop petit!")
+            case distance > 10:
+                fmt.Println("🧊 Froid! Trop petit!")
+            case distance > 5:
+                fmt.Println("😐 Tiède... Un peu plus grand!")
+            default:
+                fmt.Println("🔥 Chaud! Juste un peu plus grand!")
+            }
+            
+        case devine > nombreSecret:
+            distance := devine - nombreSecret
+            switch {
+            case distance > 30:
+                fmt.Println("❄️ Très froid! Beaucoup trop grand!")
+            case distance > 10:
+                fmt.Println("🧊 Froid! Trop grand!")
+            case distance > 5:
+                fmt.Println("😐 Tiède... Un peu plus petit!")
+            default:
+                fmt.Println("🔥 Chaud! Juste un peu plus petit!")
+            }
+        }
+        
+        if tentatives == maxTentatives {
+            fmt.Printf("💀 Perdu! Le nombre était %d\n", nombreSecret)
+        }
+    }
+}
+```
+
+### Exercice 3 : Analyseur de texte
+```go
+package main
+
+import (
+    "fmt"
+    "strings"
+    "unicode"
+)
+
+func analyserTexte(texte string) {
+    if len(texte) == 0 {
+        fmt.Println("Texte vide!")
+        return
+    }
+    
+    // Statistiques de base
+    nbCaracteres := len(texte)
+    nbRunes := len([]rune(texte))
+    mots := strings.Fields(texte)
+    nbMots := len(mots)
+    
+    // Compteurs détaillés
+    var lettres, chiffres, espaces, ponctuation int
+    
+    for _, r := range texte {
+        switch {
+        case unicode.IsLetter(r):
+            lettres++
+        case unicode.IsDigit(r):
+            chiffres++
+        case unicode.IsSpace(r):
+            espaces++
+        case unicode.IsPunct(r):
+            ponctuation++
+        }
+    }
+    
+    // Fréquence des mots
+    frequence := make(map[string]int)
+    for _, mot := range mots {
+        motPropre := strings.ToLower(strings.Trim(mot, ".,!?;"))
+        if motPropre != "" {
+            frequence[motPropre]++
+        }
+    }
+    
+    // Affichage des résultats
+    fmt.Println("=== Analyse de texte ===")
+    fmt.Printf("Caractères: %d\n", nbCaracteres)
+    fmt.Printf("Caractères Unicode: %d\n", nbRunes)
+    fmt.Printf("Mots: %d\n", nbMots)
+    fmt.Printf("Lettres: %d\n", lettres)
+    fmt.Printf("Chiffres: %d\n", chiffres)
+    fmt.Printf("Espaces: %d\n", espaces)
+    fmt.Printf("Ponctuation: %d\n", ponctuation)
+    
+    if nbMots > 0 {
+        fmt.Printf("Longueur moyenne des mots: %.1f caractères\n", 
+            float64(lettres)/float64(nbMots))
+    }
+    
+    // Top 5 des mots les plus fréquents
+    fmt.Println("\nMots les plus fréquents:")
+    for mot, freq := range frequence {
+        if freq > 1 {
+            fmt.Printf("  %s: %d fois\n", mot, freq)
+        }
+    }
+}
+
+func main() {
+    texte := `Go est un langage de programmation moderne. 
+    Go est simple, efficace et concurrent. 
+    Beaucoup d'entreprises utilisent Go pour leurs projets.`
+    
+    analyserTexte(texte)
+}
+```
+
+## Bonnes pratiques
+
+### 1. Préférez les structures simples
+```go
+// ✅ Bon
+if err != nil {
+    return err
+}
+
+// ❌ Évitez les conditions trop complexes
+if !(user.IsActive && user.HasPermission("read") && !user.IsBlocked) {
+    // Difficile à lire
+}
+
+// ✅ Mieux
+if !user.IsActive || !user.HasPermission("read") || user.IsBlocked {
+    return ErrAccesDenie
+}
+```
+
+### 2. Utilisez switch pour les multiples conditions
+```go
+// ❌ Évitez les longues chaînes if/else
+if status == "pending" {
+    // ...
+} else if status == "processing" {
+    // ...
+} else if status == "completed" {
+    // ...
+} else if status == "failed" {
+    // ...
+}
+
+// ✅ Utilisez switch
+switch status {
+case "pending":
+    // ...
+case "processing":
+    // ...
+case "completed":
+    // ...
+case "failed":
+    // ...
+}
+```
+
+### 3. Gestion cohérente des erreurs
+```go
+// ✅ Pattern standard
+func traiterDonnees() error {
+    data, err := lireDonnees()
+    if err != nil {
+        return fmt.Errorf("impossible de lire les données: %w", err)
+    }
+    
+    err = validerDonnees(data)
+    if err != nil {
+        return fmt.Errorf("données invalides: %w", err)
+    }
+    
+    return nil
+}
+```
+
+## Prochaine étape
+
+Excellent travail ! Vous maîtrisez maintenant :
+- ✅ Les conditions if/else avec toutes leurs variantes
+- ✅ Les instructions switch puissantes
+- ✅ Les boucles for sous toutes leurs formes
+- ✅ La gestion d'erreurs avec defer, panic/recover
+- ✅ Le contrôle de flux avec break/continue
+
+👉 **[Apprenons à créer des fonctions](/fonctions)**
+
+---
+
+> **💡 Astuce** : En Go, la simplicité est reine. Si votre structure de contrôle devient complexe, c'est souvent le signe qu'il faut refactoriser en plusieurs fonctions plus petites !

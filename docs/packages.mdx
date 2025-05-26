@@ -1,0 +1,971 @@
+---
+title: Packages
+description: Organisation du code, imports, go modules et création de packages
+---
+
+# Packages en Go
+
+Les packages sont la façon dont Go organise et structure le code. Ils permettent de grouper des fonctionnalités liées et de créer des programmes modulaires et réutilisables.
+
+## Concepts de base
+
+### Qu'est-ce qu'un package ?
+```go
+// Chaque fichier Go commence par une déclaration de package
+package main  // Package exécutable
+
+package utils  // Package de bibliothèque
+
+package models  // Package pour les modèles de données
+```
+
+### Rules des packages
+- **Un répertoire = un package** (tous les fichiers `.go` d'un répertoire appartiennent au même package)
+- **Package `main`** : point d'entrée des programmes exécutables
+- **Autres packages** : bibliothèques réutilisables
+- **Noms en minuscules** : convention pour les noms de packages
+
+## Organisation d'un projet
+
+### Structure recommandée
+```
+monprojet/
+├── go.mod                 # Définition du module
+├── go.sum                 # Hashes des dépendances
+├── main.go                # Point d'entrée
+├── cmd/                   # Applications exécutables
+│   ├── serveur/
+│   │   └── main.go
+│   └── client/
+│       └── main.go
+├── internal/              # Code privé au projet
+│   ├── auth/
+│   │   ├── auth.go
+│   │   └── auth_test.go
+│   └── database/
+│       ├── database.go
+│       └── models.go
+├── pkg/                   # Code réutilisable publiquement
+│   ├── utils/
+│   │   ├── strings.go
+│   │   └── math.go
+│   └── api/
+│       └── client.go
+├── web/                   # Assets web
+│   ├── static/
+│   └── templates/
+└── docs/                  # Documentation
+    └── README.md
+```
+
+### Exemple concret
+```
+calculatrice/
+├── go.mod
+├── main.go                # Point d'entrée
+├── internal/
+│   ├── operations/        # Package operations
+│   │   ├── basic.go       # +, -, *, /
+│   │   ├── advanced.go    # sin, cos, log
+│   │   └── operations_test.go
+│   └── ui/                # Package ui
+│       ├── console.go
+│       └── web.go
+└── pkg/
+    └── calculator/        # API publique
+        └── calculator.go
+```
+
+## Création et utilisation de packages
+
+### Package simple : mathutils
+Créons un package utilitaire pour les mathématiques.
+
+**pkg/mathutils/mathutils.go**
+```go
+package mathutils
+
+import "math"
+
+// Fonctions exportées (commencent par une majuscule)
+func Max(a, b int) int {
+    if a > b {
+        return a
+    }
+    return b
+}
+
+func Min(a, b int) int {
+    if a < b {
+        return a
+    }
+    return b
+}
+
+func Moyenne(nombres ...float64) float64 {
+    if len(nombres) == 0 {
+        return 0
+    }
+    
+    var somme float64
+    for _, n := range nombres {
+        somme += n
+    }
+    return somme / float64(len(nombres))
+}
+
+func EstPremier(n int) bool {
+    if n < 2 {
+        return false
+    }
+    
+    for i := 2; i <= int(math.Sqrt(float64(n))); i++ {
+        if n%i == 0 {
+            return false
+        }
+    }
+    return true
+}
+
+// Variables exportées
+const PI = 3.14159265359
+
+// Variables non exportées (privées)
+var precision = 6
+
+// Fonctions non exportées (privées)
+func arrondir(f float64) float64 {
+    return math.Round(f*math.Pow10(precision)) / math.Pow10(precision)
+}
+```
+
+### Utilisation du package
+**main.go**
+```go
+package main
+
+import (
+    "fmt"
+    
+    // Import de notre package local
+    "monprojet/pkg/mathutils"
+)
+
+func main() {
+    // Utilisation des fonctions exportées
+    fmt.Printf("Max(10, 20) = %d\n", mathutils.Max(10, 20))
+    fmt.Printf("Min(10, 20) = %d\n", mathutils.Min(10, 20))
+    fmt.Printf("Moyenne = %.2f\n", mathutils.Moyenne(1, 2, 3, 4, 5))
+    
+    // Utilisation des constantes
+    fmt.Printf("PI = %.5f\n", mathutils.PI)
+    
+    // Test de nombre premier
+    for i := 2; i <= 20; i++ {
+        if mathutils.EstPremier(i) {
+            fmt.Printf("%d est premier\n", i)
+        }
+    }
+}
+```
+
+## Imports et alias
+
+### Types d'imports
+```go
+package main
+
+import (
+    // Import standard
+    "fmt"
+    "time"
+    
+    // Import avec alias
+    f "fmt"
+    
+    // Import pour les effets de bord seulement
+    _ "github.com/lib/pq"  // Initialise le driver PostgreSQL
+    
+    // Import avec point (déconseillé généralement)
+    . "math"  // Permet d'utiliser Sin() au lieu de math.Sin()
+    
+    // Imports de packages locaux
+    "monprojet/internal/auth"
+    "monprojet/pkg/utils"
+    
+    // Imports de packages externes
+    "github.com/gorilla/mux"
+    "github.com/sirupsen/logrus"
+)
+
+func main() {
+    // Utilisation normale
+    fmt.Println("Hello")
+    
+    // Avec alias
+    f.Println("Hello avec alias")
+    
+    // Avec import point
+    result := Sin(1.0)  // Au lieu de math.Sin(1.0)
+    
+    // Packages externes
+    router := mux.NewRouter()
+    logrus.Info("Application démarrée")
+}
+```
+
+### Gestion des imports inutilisés
+```go
+package main
+
+import (
+    "fmt"
+    _ "unused/package"  // Import pour les effets de bord
+)
+
+var _ = fmt.Sprintf  // Astuce pour éviter "imported and not used"
+
+func main() {
+    // Si fmt n'était pas utilisé, on aurait une erreur de compilation
+}
+```
+
+## Go Modules
+
+### Initialisation d'un module
+```bash
+# Créer un nouveau module
+go mod init github.com/username/monprojet
+
+# Structure du go.mod généré
+```
+
+**go.mod**
+```go
+module github.com/username/monprojet
+
+go 1.21
+
+require (
+    github.com/gorilla/mux v1.8.0
+    github.com/sirupsen/logrus v1.9.3
+)
+
+require (
+    github.com/gorilla/securecookie v1.1.1 // indirect
+    golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 // indirect
+)
+```
+
+### Gestion des dépendances
+```bash
+# Ajouter une dépendance
+go get github.com/gorilla/mux
+
+# Ajouter une version spécifique
+go get github.com/gorilla/mux@v1.8.0
+
+# Mettre à jour toutes les dépendances
+go get -u ./...
+
+# Nettoyer les dépendances inutilisées
+go mod tidy
+
+# Télécharger les dépendances
+go mod download
+
+# Créer un vendor directory
+go mod vendor
+```
+
+### Versions et compatibilité
+```bash
+# Versions sémantiques
+go get example.com/pkg@v1.2.3    # Version exacte
+go get example.com/pkg@v1.2      # Dernière patch de v1.2
+go get example.com/pkg@v1        # Dernière minor de v1
+go get example.com/pkg@latest    # Dernière version
+
+# Versions de développement
+go get example.com/pkg@main      # Branche main
+go get example.com/pkg@commit    # Commit spécifique
+```
+
+## Packages internes et externes
+
+### Package internal (privé)
+```
+monprojet/
+├── internal/
+│   └── auth/
+│       └── auth.go       # Accessible seulement dans monprojet
+└── external/
+    └── some_other_project/
+        └── main.go       # Ne peut PAS importer monprojet/internal/auth
+```
+
+**internal/auth/auth.go**
+```go
+package auth
+
+import (
+    "errors"
+    "time"
+)
+
+type User struct {
+    ID       int
+    Username string
+    Role     string
+}
+
+func AuthenticateUser(username, password string) (*User, error) {
+    // Logique d'authentification
+    if username == "" || password == "" {
+        return nil, errors.New("identifiants manquants")
+    }
+    
+    // Simulation d'une vérification
+    if username == "admin" && password == "secret" {
+        return &User{
+            ID:       1,
+            Username: username,
+            Role:     "admin",
+        }, nil
+    }
+    
+    return nil, errors.New("identifiants invalides")
+}
+
+func GenerateToken(user *User) string {
+    // Simulation de génération de token
+    return fmt.Sprintf("token_%s_%d", user.Username, time.Now().Unix())
+}
+```
+
+### Package public dans pkg/
+**pkg/calculator/calculator.go**
+```go
+package calculator
+
+import "math"
+
+type Calculator struct {
+    precision int
+}
+
+func New(precision int) *Calculator {
+    return &Calculator{precision: precision}
+}
+
+func (c *Calculator) Add(a, b float64) float64 {
+    return c.round(a + b)
+}
+
+func (c *Calculator) Subtract(a, b float64) float64 {
+    return c.round(a - b)
+}
+
+func (c *Calculator) Multiply(a, b float64) float64 {
+    return c.round(a * b)
+}
+
+func (c *Calculator) Divide(a, b float64) (float64, error) {
+    if b == 0 {
+        return 0, errors.New("division par zéro")
+    }
+    return c.round(a / b), nil
+}
+
+func (c *Calculator) Power(base, exp float64) float64 {
+    return c.round(math.Pow(base, exp))
+}
+
+func (c *Calculator) round(f float64) float64 {
+    if c.precision <= 0 {
+        return f
+    }
+    factor := math.Pow10(c.precision)
+    return math.Round(f*factor) / factor
+}
+
+// Fonctions utilitaires exportées
+func IsEven(n int) bool {
+    return n%2 == 0
+}
+
+func IsOdd(n int) bool {
+    return !IsEven(n)
+}
+```
+
+## Package avec init()
+
+### Fonction d'initialisation
+```go
+package database
+
+import (
+    "database/sql"
+    "log"
+    
+    _ "github.com/lib/pq"  // Import pour l'effet de bord
+)
+
+var db *sql.DB
+
+// init() est appelée automatiquement à l'import du package
+func init() {
+    log.Println("Initialisation du package database")
+    
+    var err error
+    db, err = sql.Open("postgres", "postgres://localhost/mydb")
+    if err != nil {
+        log.Fatal("Erreur de connexion à la base de données:", err)
+    }
+    
+    if err = db.Ping(); err != nil {
+        log.Fatal("Base de données inaccessible:", err)
+    }
+    
+    log.Println("Connexion à la base de données établie")
+}
+
+// Ordre d'exécution des init() :
+// 1. Variables globales
+// 2. init() des packages importés (récursivement)
+// 3. init() du package courant
+// 4. main() si c'est le package main
+```
+
+### Exemple complet avec init()
+**pkg/config/config.go**
+```go
+package config
+
+import (
+    "encoding/json"
+    "log"
+    "os"
+)
+
+type AppConfig struct {
+    Port     int    `json:"port"`
+    Database string `json:"database"`
+    LogLevel string `json:"log_level"`
+}
+
+var Config *AppConfig
+
+func init() {
+    Config = &AppConfig{
+        Port:     8080,
+        Database: "localhost:5432",
+        LogLevel: "info",
+    }
+    
+    // Charger depuis un fichier si il existe
+    if file, err := os.Open("config.json"); err == nil {
+        defer file.Close()
+        
+        decoder := json.NewDecoder(file)
+        if err := decoder.Decode(Config); err != nil {
+            log.Printf("Erreur lors du chargement de config.json: %v", err)
+        } else {
+            log.Println("Configuration chargée depuis config.json")
+        }
+    }
+    
+    // Surcharger avec les variables d'environnement
+    if port := os.Getenv("APP_PORT"); port != "" {
+        // Parsing et assignation...
+    }
+}
+
+func (c *AppConfig) IsProduction() bool {
+    return c.LogLevel == "error" || c.LogLevel == "warn"
+}
+```
+
+## Documentation des packages
+
+### Commentaires de documentation
+```go
+// Package mathutils fournit des utilitaires mathématiques couramment utilisés.
+//
+// Ce package inclut des fonctions pour les opérations de base, les statistiques
+// et la vérification de propriétés mathématiques comme les nombres premiers.
+//
+// Exemple d'utilisation :
+//
+//    import "monprojet/pkg/mathutils"
+//
+//    max := mathutils.Max(10, 20)
+//    moyenne := mathutils.Moyenne(1, 2, 3, 4, 5)
+//    premier := mathutils.EstPremier(17)
+//
+package mathutils
+
+import "math"
+
+// Max retourne le plus grand des deux entiers fournis.
+//
+// Cette fonction compare deux entiers et retourne la valeur maximale.
+// Elle gère correctement les nombres négatifs.
+//
+// Exemple :
+//    result := Max(-5, 3)  // retourne 3
+func Max(a, b int) int {
+    if a > b {
+        return a
+    }
+    return b
+}
+
+// Statistiques représente un ensemble de mesures statistiques.
+//
+// Cette structure contient les principaux indicateurs statistiques
+// calculés à partir d'un ensemble de données numériques.
+type Statistiques struct {
+    // Moyenne arithmétique des valeurs
+    Moyenne float64
+    
+    // Valeur minimale trouvée
+    Min float64
+    
+    // Valeur maximale trouvée  
+    Max float64
+    
+    // Nombre total de valeurs
+    Count int
+}
+
+// CalculerStatistiques analyse un ensemble de nombres et retourne
+// les statistiques de base.
+//
+// Si aucun nombre n'est fourni, retourne des statistiques avec
+// toutes les valeurs à zéro.
+func CalculerStatistiques(nombres ...float64) Statistiques {
+    if len(nombres) == 0 {
+        return Statistiques{}
+    }
+    
+    stats := Statistiques{
+        Min:   nombres[0],
+        Max:   nombres[0],
+        Count: len(nombres),
+    }
+    
+    var somme float64
+    for _, n := range nombres {
+        somme += n
+        if n < stats.Min {
+            stats.Min = n
+        }
+        if n > stats.Max {
+            stats.Max = n
+        }
+    }
+    
+    stats.Moyenne = somme / float64(len(nombres))
+    return stats
+}
+```
+
+### Génération de documentation
+```bash
+# Générer la documentation HTML
+go doc -http=:6060
+
+# Afficher la documentation d'un package
+go doc mathutils
+
+# Afficher la documentation d'une fonction spécifique
+go doc mathutils.Max
+
+# Documentation complète
+go doc -all mathutils
+```
+
+## Exemples pratiques
+
+### Exercice 1 : Package de validation
+**pkg/validation/validation.go**
+```go
+package validation
+
+import (
+    "errors"
+    "regexp"
+    "strings"
+)
+
+// Validator représente une fonction de validation
+type Validator func(string) error
+
+// Result contient le résultat de validation
+type Result struct {
+    Valid  bool
+    Errors []string
+}
+
+// Engine moteur de validation
+type Engine struct {
+    rules map[string][]Validator
+}
+
+// NewEngine crée un nouveau moteur de validation
+func NewEngine() *Engine {
+    return &Engine{
+        rules: make(map[string][]Validator),
+    }
+}
+
+// AddRule ajoute une règle de validation pour un champ
+func (e *Engine) AddRule(field string, validators ...Validator) *Engine {
+    e.rules[field] = append(e.rules[field], validators...)
+    return e
+}
+
+// Validate valide un ensemble de données
+func (e *Engine) Validate(data map[string]string) map[string]Result {
+    results := make(map[string]Result)
+    
+    for field, validators := range e.rules {
+        result := Result{Valid: true}
+        value := data[field]
+        
+        for _, validator := range validators {
+            if err := validator(value); err != nil {
+                result.Valid = false
+                result.Errors = append(result.Errors, err.Error())
+            }
+        }
+        
+        results[field] = result
+    }
+    
+    return results
+}
+
+// Validators prédéfinis
+
+// Required vérifie qu'un champ n'est pas vide
+func Required() Validator {
+    return func(value string) error {
+        if strings.TrimSpace(value) == "" {
+            return errors.New("ce champ est requis")
+        }
+        return nil
+    }
+}
+
+// MinLength vérifie la longueur minimale
+func MinLength(min int) Validator {
+    return func(value string) error {
+        if len(value) < min {
+            return fmt.Errorf("doit contenir au moins %d caractères", min)
+        }
+        return nil
+    }
+}
+
+// MaxLength vérifie la longueur maximale
+func MaxLength(max int) Validator {
+    return func(value string) error {
+        if len(value) > max {
+            return fmt.Errorf("ne doit pas dépasser %d caractères", max)
+        }
+        return nil
+    }
+}
+
+// Email vérifie le format email
+func Email() Validator {
+    emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+    return func(value string) error {
+        if value != "" && !emailRegex.MatchString(value) {
+            return errors.New("format d'email invalide")
+        }
+        return nil
+    }
+}
+
+// Pattern vérifie un motif regex
+func Pattern(pattern, message string) Validator {
+    regex := regexp.MustCompile(pattern)
+    return func(value string) error {
+        if value != "" && !regex.MatchString(value) {
+            return errors.New(message)
+        }
+        return nil
+    }
+}
+```
+
+### Utilisation du package validation
+**main.go**
+```go
+package main
+
+import (
+    "fmt"
+    
+    "monprojet/pkg/validation"
+)
+
+func main() {
+    // Créer le moteur de validation
+    validator := validation.NewEngine()
+    
+    // Configurer les règles
+    validator.
+        AddRule("nom", validation.Required(), validation.MinLength(2)).
+        AddRule("email", validation.Required(), validation.Email()).
+        AddRule("password", 
+            validation.Required(), 
+            validation.MinLength(8),
+            validation.Pattern(`[A-Z]`, "doit contenir au moins une majuscule"),
+            validation.Pattern(`[0-9]`, "doit contenir au moins un chiffre"),
+        )
+    
+    // Données à valider
+    userData := map[string]string{
+        "nom":      "Alice",
+        "email":    "alice@example.com",
+        "password": "Password123",
+    }
+    
+    // Validation
+    results := validator.Validate(userData)
+    
+    // Affichage des résultats
+    fmt.Println("=== Résultats de validation ===")
+    for field, result := range results {
+        if result.Valid {
+            fmt.Printf("✅ %s: valide\n", field)
+        } else {
+            fmt.Printf("❌ %s: invalide\n", field)
+            for _, err := range result.Errors {
+                fmt.Printf("   - %s\n", err)
+            }
+        }
+    }
+}
+```
+
+### Exercice 2 : Package de logging
+**pkg/logger/logger.go**
+```go
+package logger
+
+import (
+    "fmt"
+    "io"
+    "log"
+    "os"
+    "runtime"
+    "strings"
+    "time"
+)
+
+type Level int
+
+const (
+    DEBUG Level = iota
+    INFO
+    WARN
+    ERROR
+    FATAL
+)
+
+func (l Level) String() string {
+    switch l {
+    case DEBUG:
+        return "DEBUG"
+    case INFO:
+        return "INFO"
+    case WARN:
+        return "WARN"
+    case ERROR:
+        return "ERROR"
+    case FATAL:
+        return "FATAL"
+    default:
+        return "UNKNOWN"
+    }
+}
+
+type Logger struct {
+    level  Level
+    output io.Writer
+    logger *log.Logger
+}
+
+// NewLogger crée un nouveau logger
+func NewLogger(level Level, output io.Writer) *Logger {
+    return &Logger{
+        level:  level,
+        output: output,
+        logger: log.New(output, "", 0),
+    }
+}
+
+// NewConsoleLogger crée un logger pour la console
+func NewConsoleLogger(level Level) *Logger {
+    return NewLogger(level, os.Stdout)
+}
+
+// NewFileLogger crée un logger pour un fichier
+func NewFileLogger(level Level, filename string) (*Logger, error) {
+    file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+    if err != nil {
+        return nil, err
+    }
+    return NewLogger(level, file), nil
+}
+
+func (l *Logger) log(level Level, format string, args ...interface{}) {
+    if level < l.level {
+        return
+    }
+    
+    // Obtenir les informations d'appel
+    _, file, line, ok := runtime.Caller(2)
+    caller := "unknown"
+    if ok {
+        parts := strings.Split(file, "/")
+        if len(parts) > 0 {
+            caller = fmt.Sprintf("%s:%d", parts[len(parts)-1], line)
+        }
+    }
+    
+    // Formatter le message
+    timestamp := time.Now().Format("2006-01-02 15:04:05")
+    message := fmt.Sprintf(format, args...)
+    
+    logLine := fmt.Sprintf("[%s] %s %s - %s", 
+        timestamp, level.String(), caller, message)
+    
+    l.logger.Println(logLine)
+    
+    // Fatal arrête le programme
+    if level == FATAL {
+        os.Exit(1)
+    }
+}
+
+func (l *Logger) Debug(format string, args ...interface{}) {
+    l.log(DEBUG, format, args...)
+}
+
+func (l *Logger) Info(format string, args ...interface{}) {
+    l.log(INFO, format, args...)
+}
+
+func (l *Logger) Warn(format string, args ...interface{}) {
+    l.log(WARN, format, args...)
+}
+
+func (l *Logger) Error(format string, args ...interface{}) {
+    l.log(ERROR, format, args...)
+}
+
+func (l *Logger) Fatal(format string, args ...interface{}) {
+    l.log(FATAL, format, args...)
+}
+
+// Logger global par défaut
+var defaultLogger = NewConsoleLogger(INFO)
+
+// Fonctions globales
+func Debug(format string, args ...interface{}) {
+    defaultLogger.Debug(format, args...)
+}
+
+func Info(format string, args ...interface{}) {
+    defaultLogger.Info(format, args...)
+}
+
+func Warn(format string, args ...interface{}) {
+    defaultLogger.Warn(format, args...)
+}
+
+func Error(format string, args ...interface{}) {
+    defaultLogger.Error(format, args...)
+}
+
+func Fatal(format string, args ...interface{}) {
+    defaultLogger.Fatal(format, args...)
+}
+
+func SetLevel(level Level) {
+    defaultLogger.level = level
+}
+```
+
+## Bonnes pratiques
+
+### 1. Nommage des packages
+```go
+// ✅ Bon - noms courts et descriptifs
+package http
+package json
+package auth
+package user
+
+// ❌ Évitez - noms trop génériques ou longs
+package utils
+package helpers
+package authenticationandauthorization
+```
+
+### 2. Organisation des fichiers
+```go
+// ✅ Un fichier par type/concept principal
+user.go          // type User et méthodes
+user_service.go  // logique métier
+user_handler.go  // handlers HTTP
+user_test.go     // tests
+
+// ❌ Évitez les gros fichiers fourre-tout
+everything.go
+```
+
+### 3. API publique claire
+```go
+// ✅ Exportez seulement ce qui est nécessaire
+func PublicFunction() {}     // Exportée
+func privateFunction() {}    // Privée
+
+type PublicStruct struct {
+    PublicField  string      // Exporté
+    privateField string      // Privé
+}
+```
+
+### 4. Gestion des erreurs
+```go
+// ✅ Retournez des erreurs appropriées
+func LoadConfig(filename string) (*Config, error) {
+    if filename == "" {
+        return nil, errors.New("nom de fichier requis")
+    }
+    // ...
+}
+```
+
+## Prochaine étape
+
+Parfait ! Vous maîtrisez maintenant :
+- ✅ Organisation des packages et structure de projet
+- ✅ Imports, exports et visibilité
+- ✅ Go modules et gestion des dépendances
+- ✅ Packages internes vs externes
+- ✅ Documentation et bonnes pratiques
+
+👉 **[Découvrons la concurrence avec les goroutines](/concurrence)**
+
+---
+
+> **💡 Astuce** : Un bon package a une responsabilité claire, une API simple et une documentation complète. Pensez à vos packages comme des boîtes à outils spécialisées !

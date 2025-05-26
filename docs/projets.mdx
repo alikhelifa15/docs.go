@@ -1,0 +1,1226 @@
+---
+title: Projets pratiques
+description: Projets complets pour pratiquer Go - CLI, API REST, microservices
+---
+
+# Projets pratiques en Go
+
+Mettons en pratique vos connaissances Go avec des projets concrets et progressifs. Chaque projet introduit de nouveaux concepts tout en consolidant les acquis.
+
+## Projet 1 : CLI de gestion de tâches
+
+### Objectifs d'apprentissage
+- Gestion des arguments de ligne de commande
+- Persistance de données (JSON)
+- Structures et méthodes
+- Gestion d'erreurs
+
+### Structure du projet
+```
+todo-cli/
+├── go.mod
+├── main.go
+├── internal/
+│   ├── task/
+│   │   ├── task.go
+│   │   └── storage.go
+│   └── cli/
+│       └── commands.go
+└── README.md
+```
+
+### Code complet
+
+**go.mod**
+```go
+module todo-cli
+
+go 1.21
+
+require github.com/spf13/cobra v1.7.0
+```
+
+**internal/task/task.go**
+```go
+package task
+
+import (
+    "fmt"
+    "time"
+)
+
+type Status string
+
+const (
+    StatusPending   Status = "pending"
+    StatusCompleted Status = "completed"
+)
+
+type Task struct {
+    ID          int       `json:"id"`
+    Title       string    `json:"title"`
+    Description string    `json:"description"`
+    Status      Status    `json:"status"`
+    CreatedAt   time.Time `json:"created_at"`
+    CompletedAt *time.Time `json:"completed_at,omitempty"`
+    Priority    int       `json:"priority"` // 1-5, 5 étant le plus urgent
+}
+
+func NewTask(title, description string, priority int) *Task {
+    return &Task{
+        Title:       title,
+        Description: description,
+        Status:      StatusPending,
+        CreatedAt:   time.Now(),
+        Priority:    priority,
+    }
+}
+
+func (t *Task) Complete() {
+    t.Status = StatusCompleted
+    now := time.Now()
+    t.CompletedAt = &now
+}
+
+func (t *Task) IsCompleted() bool {
+    return t.Status == StatusCompleted
+}
+
+func (t *Task) String() string {
+    status := "❌"
+    if t.IsCompleted() {
+        status = "✅"
+    }
+    
+    priority := ""
+    switch t.Priority {
+    case 5:
+        priority = "🔴"
+    case 4:
+        priority = "🟠"
+    case 3:
+        priority = "🟡"
+    case 2:
+        priority = "🔵"
+    case 1:
+        priority = "⚪"
+    }
+    
+    return fmt.Sprintf("%s %s [%d] %s", status, priority, t.ID, t.Title)
+}
+
+type TaskList struct {
+    tasks  []Task
+    nextID int
+}
+
+func NewTaskList() *TaskList {
+    return &TaskList{
+        tasks:  make([]Task, 0),
+        nextID: 1,
+    }
+}
+
+func (tl *TaskList) AddTask(title, description string, priority int) *Task {
+    task := NewTask(title, description, priority)
+    task.ID = tl.nextID
+    tl.nextID++
+    
+    tl.tasks = append(tl.tasks, *task)
+    return task
+}
+
+func (tl *TaskList) GetTask(id int) (*Task, error) {
+    for i := range tl.tasks {
+        if tl.tasks[i].ID == id {
+            return &tl.tasks[i], nil
+        }
+    }
+    return nil, fmt.Errorf("tâche avec ID %d non trouvée", id)
+}
+
+func (tl *TaskList) CompleteTask(id int) error {
+    task, err := tl.GetTask(id)
+    if err != nil {
+        return err
+    }
+    
+    task.Complete()
+    return nil
+}
+
+func (tl *TaskList) DeleteTask(id int) error {
+    for i, task := range tl.tasks {
+        if task.ID == id {
+            tl.tasks = append(tl.tasks[:i], tl.tasks[i+1:]...)
+            return nil
+        }
+    }
+    return fmt.Errorf("tâche avec ID %d non trouvée", id)
+}
+
+func (tl *TaskList) ListTasks(showCompleted bool) []Task {
+    var result []Task
+    
+    for _, task := range tl.tasks {
+        if showCompleted || !task.IsCompleted() {
+            result = append(result, task)
+        }
+    }
+    
+    return result
+}
+
+func (tl *TaskList) GetStats() (total, completed, pending int) {
+    total = len(tl.tasks)
+    for _, task := range tl.tasks {
+        if task.IsCompleted() {
+            completed++
+        } else {
+            pending++
+        }
+    }
+    return
+}
+```
+
+**internal/task/storage.go**
+```go
+package task
+
+import (
+    "encoding/json"
+    "os"
+    "path/filepath"
+)
+
+type JSONStorage struct {
+    filename string
+}
+
+func NewJSONStorage(filename string) *JSONStorage {
+    return &JSONStorage{filename: filename}
+}
+
+func (s *JSONStorage) Save(taskList *TaskList) error {
+    // Créer le répertoire si nécessaire
+    dir := filepath.Dir(s.filename)
+    if err := os.MkdirAll(dir, 0755); err != nil {
+        return fmt.Errorf("impossible de créer le répertoire %s: %w", dir, err)
+    }
+    
+    // Sérialiser en JSON
+    data, err := json.MarshalIndent(taskList, "", "  ")
+    if err != nil {
+        return fmt.Errorf("erreur de sérialisation: %w", err)
+    }
+    
+    // Écrire dans le fichier
+    if err := os.WriteFile(s.filename, data, 0644); err != nil {
+        return fmt.Errorf("impossible d'écrire dans %s: %w", s.filename, err)
+    }
+    
+    return nil
+}
+
+func (s *JSONStorage) Load() (*TaskList, error) {
+    // Vérifier si le fichier existe
+    if _, err := os.Stat(s.filename); os.IsNotExist(err) {
+        return NewTaskList(), nil // Retourner une liste vide si le fichier n'existe pas
+    }
+    
+    // Lire le fichier
+    data, err := os.ReadFile(s.filename)
+    if err != nil {
+        return nil, fmt.Errorf("impossible de lire %s: %w", s.filename, err)
+    }
+    
+    // Désérialiser
+    var taskList TaskList
+    if err := json.Unmarshal(data, &taskList); err != nil {
+        return nil, fmt.Errorf("erreur de désérialisation: %w", err)
+    }
+    
+    return &taskList, nil
+}
+```
+
+**internal/cli/commands.go**
+```go
+package cli
+
+import (
+    "fmt"
+    "os"
+    "path/filepath"
+    "sort"
+    "strconv"
+    "strings"
+    
+    "github.com/spf13/cobra"
+    "todo-cli/internal/task"
+)
+
+type CLI struct {
+    storage  *task.JSONStorage
+    taskList *task.TaskList
+}
+
+func NewCLI() *CLI {
+    homeDir, _ := os.UserHomeDir()
+    storageFile := filepath.Join(homeDir, ".todo", "tasks.json")
+    
+    return &CLI{
+        storage: task.NewJSONStorage(storageFile),
+    }
+}
+
+func (c *CLI) loadTasks() error {
+    var err error
+    c.taskList, err = c.storage.Load()
+    return err
+}
+
+func (c *CLI) saveTasks() error {
+    return c.storage.Save(c.taskList)
+}
+
+func (c *CLI) CreateRootCommand() *cobra.Command {
+    rootCmd := &cobra.Command{
+        Use:   "todo",
+        Short: "Un gestionnaire de tâches simple",
+        Long:  "Gérez vos tâches quotidiennes avec ce CLI simple et efficace.",
+    }
+    
+    rootCmd.AddCommand(c.createAddCommand())
+    rootCmd.AddCommand(c.createListCommand())
+    rootCmd.AddCommand(c.createCompleteCommand())
+    rootCmd.AddCommand(c.createDeleteCommand())
+    rootCmd.AddCommand(c.createStatsCommand())
+    
+    return rootCmd
+}
+
+func (c *CLI) createAddCommand() *cobra.Command {
+    var priority int
+    var description string
+    
+    cmd := &cobra.Command{
+        Use:   "add [title]",
+        Short: "Ajouter une nouvelle tâche",
+        Args:  cobra.ExactArgs(1),
+        RunE: func(cmd *cobra.Command, args []string) error {
+            if err := c.loadTasks(); err != nil {
+                return err
+            }
+            
+            title := args[0]
+            task := c.taskList.AddTask(title, description, priority)
+            
+            if err := c.saveTasks(); err != nil {
+                return err
+            }
+            
+            fmt.Printf("✅ Tâche ajoutée: %s (ID: %d)\n", task.Title, task.ID)
+            return nil
+        },
+    }
+    
+    cmd.Flags().IntVarP(&priority, "priority", "p", 3, "Priorité de la tâche (1-5)")
+    cmd.Flags().StringVarP(&description, "description", "d", "", "Description de la tâche")
+    
+    return cmd
+}
+
+func (c *CLI) createListCommand() *cobra.Command {
+    var showCompleted bool
+    var sortBy string
+    
+    cmd := &cobra.Command{
+        Use:   "list",
+        Short: "Lister les tâches",
+        Aliases: []string{"ls"},
+        RunE: func(cmd *cobra.Command, args []string) error {
+            if err := c.loadTasks(); err != nil {
+                return err
+            }
+            
+            tasks := c.taskList.ListTasks(showCompleted)
+            
+            // Trier les tâches
+            switch sortBy {
+            case "priority":
+                sort.Slice(tasks, func(i, j int) bool {
+                    return tasks[i].Priority > tasks[j].Priority
+                })
+            case "created":
+                sort.Slice(tasks, func(i, j int) bool {
+                    return tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
+                })
+            case "id":
+                sort.Slice(tasks, func(i, j int) bool {
+                    return tasks[i].ID < tasks[j].ID
+                })
+            }
+            
+            if len(tasks) == 0 {
+                fmt.Println("Aucune tâche trouvée.")
+                return nil
+            }
+            
+            fmt.Printf("📋 Liste des tâches (%d):\n\n", len(tasks))
+            for _, task := range tasks {
+                fmt.Println(task.String())
+                if task.Description != "" {
+                    fmt.Printf("   📝 %s\n", task.Description)
+                }
+                fmt.Printf("   📅 Créée: %s\n", task.CreatedAt.Format("02/01/2006 15:04"))
+                if task.CompletedAt != nil {
+                    fmt.Printf("   ✅ Terminée: %s\n", task.CompletedAt.Format("02/01/2006 15:04"))
+                }
+                fmt.Println()
+            }
+            
+            return nil
+        },
+    }
+    
+    cmd.Flags().BoolVarP(&showCompleted, "all", "a", false, "Afficher toutes les tâches y compris terminées")
+    cmd.Flags().StringVarP(&sortBy, "sort", "s", "id", "Trier par: id, priority, created")
+    
+    return cmd
+}
+
+func (c *CLI) createCompleteCommand() *cobra.Command {
+    cmd := &cobra.Command{
+        Use:   "complete [id]",
+        Short: "Marquer une tâche comme terminée",
+        Aliases: []string{"done"},
+        Args:  cobra.ExactArgs(1),
+        RunE: func(cmd *cobra.Command, args []string) error {
+            if err := c.loadTasks(); err != nil {
+                return err
+            }
+            
+            id, err := strconv.Atoi(args[0])
+            if err != nil {
+                return fmt.Errorf("ID invalide: %s", args[0])
+            }
+            
+            task, err := c.taskList.GetTask(id)
+            if err != nil {
+                return err
+            }
+            
+            if task.IsCompleted() {
+                fmt.Printf("⚠️ La tâche '%s' est déjà terminée.\n", task.Title)
+                return nil
+            }
+            
+            if err := c.taskList.CompleteTask(id); err != nil {
+                return err
+            }
+            
+            if err := c.saveTasks(); err != nil {
+                return err
+            }
+            
+            fmt.Printf("🎉 Tâche terminée: %s\n", task.Title)
+            return nil
+        },
+    }
+    
+    return cmd
+}
+
+func (c *CLI) createDeleteCommand() *cobra.Command {
+    cmd := &cobra.Command{
+        Use:   "delete [id]",
+        Short: "Supprimer une tâche",
+        Aliases: []string{"rm"},
+        Args:  cobra.ExactArgs(1),
+        RunE: func(cmd *cobra.Command, args []string) error {
+            if err := c.loadTasks(); err != nil {
+                return err
+            }
+            
+            id, err := strconv.Atoi(args[0])
+            if err != nil {
+                return fmt.Errorf("ID invalide: %s", args[0])
+            }
+            
+            task, err := c.taskList.GetTask(id)
+            if err != nil {
+                return err
+            }
+            
+            if err := c.taskList.DeleteTask(id); err != nil {
+                return err
+            }
+            
+            if err := c.saveTasks(); err != nil {
+                return err
+            }
+            
+            fmt.Printf("🗑️ Tâche supprimée: %s\n", task.Title)
+            return nil
+        },
+    }
+    
+    return cmd
+}
+
+func (c *CLI) createStatsCommand() *cobra.Command {
+    cmd := &cobra.Command{
+        Use:   "stats",
+        Short: "Afficher les statistiques",
+        RunE: func(cmd *cobra.Command, args []string) error {
+            if err := c.loadTasks(); err != nil {
+                return err
+            }
+            
+            total, completed, pending := c.taskList.GetStats()
+            
+            fmt.Println("📊 Statistiques des tâches:")
+            fmt.Printf("   Total: %d\n", total)
+            fmt.Printf("   Terminées: %d\n", completed)
+            fmt.Printf("   En attente: %d\n", pending)
+            
+            if total > 0 {
+                percentage := float64(completed) / float64(total) * 100
+                fmt.Printf("   Progression: %.1f%%\n", percentage)
+                
+                // Barre de progression
+                barLength := 20
+                filled := int(percentage / 100 * float64(barLength))
+                bar := strings.Repeat("█", filled) + strings.Repeat("░", barLength-filled)
+                fmt.Printf("   [%s]\n", bar)
+            }
+            
+            return nil
+        },
+    }
+    
+    return cmd
+}
+```
+
+**main.go**
+```go
+package main
+
+import (
+    "fmt"
+    "os"
+    
+    "todo-cli/internal/cli"
+)
+
+func main() {
+    app := cli.NewCLI()
+    rootCmd := app.CreateRootCommand()
+    
+    if err := rootCmd.Execute(); err != nil {
+        fmt.Fprintf(os.Stderr, "Erreur: %v\n", err)
+        os.Exit(1)
+    }
+}
+```
+
+### Utilisation
+```bash
+# Installer les dépendances
+go mod tidy
+
+# Compiler
+go build -o todo
+
+# Utilisation
+./todo add "Apprendre Go" -p 5 -d "Finir la documentation Go"
+./todo add "Faire les courses" -p 2
+./todo list
+./todo complete 1
+./todo stats
+./todo delete 2
+```
+
+## Projet 2 : API REST pour un blog
+
+### Objectifs d'apprentissage
+- Serveur HTTP avec Gorilla Mux
+- Base de données avec GORM
+- Middleware (authentification, logging)
+- Tests d'API
+- Structure MVC
+
+### Structure du projet
+```
+blog-api/
+├── go.mod
+├── main.go
+├── config/
+│   └── config.go
+├── internal/
+│   ├── models/
+│   │   ├── user.go
+│   │   └── post.go
+│   ├── handlers/
+│   │   ├── auth.go
+│   │   ├── posts.go
+│   │   └── users.go
+│   ├── middleware/
+│   │   ├── auth.go
+│   │   └── logging.go
+│   ├── repository/
+│   │   ├── user_repo.go
+│   │   └── post_repo.go
+│   └── services/
+│       ├── auth_service.go
+│       └── post_service.go
+├── migrations/
+│   └── 001_initial.sql
+└── tests/
+    ├── integration_test.go
+    └── api_test.go
+```
+
+### Code principal
+
+**go.mod**
+```go
+module blog-api
+
+go 1.21
+
+require (
+    github.com/gorilla/mux v1.8.0
+    github.com/golang-jwt/jwt/v5 v5.0.0
+    gorm.io/gorm v1.25.4
+    gorm.io/driver/postgres v1.5.2
+    github.com/joho/godotenv v1.4.0
+    golang.org/x/crypto v0.13.0
+)
+```
+
+**config/config.go**
+```go
+package config
+
+import (
+    "os"
+    "strconv"
+)
+
+type Config struct {
+    ServerPort     string
+    DatabaseURL    string
+    JWTSecret      string
+    Environment    string
+    LogLevel       string
+}
+
+func Load() *Config {
+    return &Config{
+        ServerPort:  getEnv("SERVER_PORT", "8080"),
+        DatabaseURL: getEnv("DATABASE_URL", "postgres://user:password@localhost/blog_db?sslmode=disable"),
+        JWTSecret:   getEnv("JWT_SECRET", "your-secret-key"),
+        Environment: getEnv("ENVIRONMENT", "development"),
+        LogLevel:    getEnv("LOG_LEVEL", "info"),
+    }
+}
+
+func getEnv(key, defaultValue string) string {
+    if value := os.Getenv(key); value != "" {
+        return value
+    }
+    return defaultValue
+}
+
+func getEnvAsInt(key string, defaultValue int) int {
+    if value := os.Getenv(key); value != "" {
+        if intValue, err := strconv.Atoi(value); err == nil {
+            return intValue
+        }
+    }
+    return defaultValue
+}
+```
+
+**internal/models/user.go**
+```go
+package models
+
+import (
+    "time"
+    "golang.org/x/crypto/bcrypt"
+    "gorm.io/gorm"
+)
+
+type User struct {
+    ID        uint      `json:"id" gorm:"primaryKey"`
+    Username  string    `json:"username" gorm:"uniqueIndex;not null"`
+    Email     string    `json:"email" gorm:"uniqueIndex;not null"`
+    Password  string    `json:"-" gorm:"not null"`
+    Bio       string    `json:"bio"`
+    Avatar    string    `json:"avatar"`
+    IsActive  bool      `json:"is_active" gorm:"default:true"`
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at"`
+    
+    // Relations
+    Posts []Post `json:"posts,omitempty" gorm:"foreignKey:AuthorID"`
+}
+
+func (u *User) BeforeCreate(tx *gorm.DB) error {
+    if u.Password != "" {
+        hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
+        if err != nil {
+            return err
+        }
+        u.Password = string(hashedPassword)
+    }
+    return nil
+}
+
+func (u *User) CheckPassword(password string) bool {
+    err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password))
+    return err == nil
+}
+
+type CreateUserRequest struct {
+    Username string `json:"username" validate:"required,min=3,max=20"`
+    Email    string `json:"email" validate:"required,email"`
+    Password string `json:"password" validate:"required,min=6"`
+    Bio      string `json:"bio" validate:"max=500"`
+}
+
+type UpdateUserRequest struct {
+    Bio    string `json:"bio" validate:"max=500"`
+    Avatar string `json:"avatar" validate:"url"`
+}
+
+type LoginRequest struct {
+    Email    string `json:"email" validate:"required,email"`
+    Password string `json:"password" validate:"required"`
+}
+
+type UserResponse struct {
+    ID        uint      `json:"id"`
+    Username  string    `json:"username"`
+    Email     string    `json:"email"`
+    Bio       string    `json:"bio"`
+    Avatar    string    `json:"avatar"`
+    IsActive  bool      `json:"is_active"`
+    CreatedAt time.Time `json:"created_at"`
+}
+
+func (u *User) ToResponse() UserResponse {
+    return UserResponse{
+        ID:        u.ID,
+        Username:  u.Username,
+        Email:     u.Email,
+        Bio:       u.Bio,
+        Avatar:    u.Avatar,
+        IsActive:  u.IsActive,
+        CreatedAt: u.CreatedAt,
+    }
+}
+```
+
+**internal/models/post.go**
+```go
+package models
+
+import (
+    "time"
+    "gorm.io/gorm"
+)
+
+type PostStatus string
+
+const (
+    PostStatusDraft     PostStatus = "draft"
+    PostStatusPublished PostStatus = "published"
+    PostStatusArchived  PostStatus = "archived"
+)
+
+type Post struct {
+    ID          uint       `json:"id" gorm:"primaryKey"`
+    Title       string     `json:"title" gorm:"not null"`
+    Slug        string     `json:"slug" gorm:"uniqueIndex;not null"`
+    Content     string     `json:"content" gorm:"type:text"`
+    Excerpt     string     `json:"excerpt"`
+    Status      PostStatus `json:"status" gorm:"default:'draft'"`
+    AuthorID    uint       `json:"author_id" gorm:"not null"`
+    ViewCount   int        `json:"view_count" gorm:"default:0"`
+    PublishedAt *time.Time `json:"published_at"`
+    CreatedAt   time.Time  `json:"created_at"`
+    UpdatedAt   time.Time  `json:"updated_at"`
+    
+    // Relations
+    Author User `json:"author" gorm:"foreignKey:AuthorID"`
+}
+
+type CreatePostRequest struct {
+    Title   string     `json:"title" validate:"required,min=1,max=200"`
+    Content string     `json:"content" validate:"required"`
+    Excerpt string     `json:"excerpt" validate:"max=500"`
+    Status  PostStatus `json:"status" validate:"oneof=draft published"`
+}
+
+type UpdatePostRequest struct {
+    Title   string     `json:"title" validate:"min=1,max=200"`
+    Content string     `json:"content"`
+    Excerpt string     `json:"excerpt" validate:"max=500"`
+    Status  PostStatus `json:"status" validate:"oneof=draft published archived"`
+}
+
+type PostResponse struct {
+    ID          uint         `json:"id"`
+    Title       string       `json:"title"`
+    Slug        string       `json:"slug"`
+    Content     string       `json:"content"`
+    Excerpt     string       `json:"excerpt"`
+    Status      PostStatus   `json:"status"`
+    ViewCount   int          `json:"view_count"`
+    PublishedAt *time.Time   `json:"published_at"`
+    CreatedAt   time.Time    `json:"created_at"`
+    UpdatedAt   time.Time    `json:"updated_at"`
+    Author      UserResponse `json:"author"`
+}
+
+func (p *Post) BeforeCreate(tx *gorm.DB) error {
+    if p.Slug == "" {
+        p.Slug = generateSlug(p.Title)
+    }
+    
+    if p.Status == PostStatusPublished && p.PublishedAt == nil {
+        now := time.Now()
+        p.PublishedAt = &now
+    }
+    
+    return nil
+}
+
+func (p *Post) BeforeUpdate(tx *gorm.DB) error {
+    if p.Status == PostStatusPublished && p.PublishedAt == nil {
+        now := time.Now()
+        p.PublishedAt = &now
+    }
+    return nil
+}
+
+func (p *Post) ToResponse() PostResponse {
+    return PostResponse{
+        ID:          p.ID,
+        Title:       p.Title,
+        Slug:        p.Slug,
+        Content:     p.Content,
+        Excerpt:     p.Excerpt,
+        Status:      p.Status,
+        ViewCount:   p.ViewCount,
+        PublishedAt: p.PublishedAt,
+        CreatedAt:   p.CreatedAt,
+        UpdatedAt:   p.UpdatedAt,
+        Author:      p.Author.ToResponse(),
+    }
+}
+
+func generateSlug(title string) string {
+    // Implémentation simplifiée - dans un vrai projet, utilisez une librairie
+    return strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+}
+```
+
+**internal/handlers/auth.go**
+```go
+package handlers
+
+import (
+    "encoding/json"
+    "net/http"
+    "time"
+    
+    "blog-api/internal/models"
+    "blog-api/internal/services"
+    "github.com/golang-jwt/jwt/v5"
+)
+
+type AuthHandler struct {
+    authService *services.AuthService
+    userService *services.UserService
+    jwtSecret   string
+}
+
+func NewAuthHandler(authService *services.AuthService, userService *services.UserService, jwtSecret string) *AuthHandler {
+    return &AuthHandler{
+        authService: authService,
+        userService: userService,
+        jwtSecret:   jwtSecret,
+    }
+}
+
+func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+    var req models.CreateUserRequest
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+    
+    user, err := h.userService.CreateUser(req)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return
+    }
+    
+    token, err := h.generateToken(user.ID)
+    if err != nil {
+        http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+        return
+    }
+    
+    response := map[string]interface{}{
+        "user":  user.ToResponse(),
+        "token": token,
+    }
+    
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(response)
+}
+
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+    var req models.LoginRequest
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+    
+    user, err := h.authService.Authenticate(req.Email, req.Password)
+    if err != nil {
+        http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+        return
+    }
+    
+    token, err := h.generateToken(user.ID)
+    if err != nil {
+        http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+        return
+    }
+    
+    response := map[string]interface{}{
+        "user":  user.ToResponse(),
+        "token": token,
+    }
+    
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(response)
+}
+
+func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
+    userID := r.Context().Value("user_id").(uint)
+    
+    user, err := h.userService.GetUserByID(userID)
+    if err != nil {
+        http.Error(w, "User not found", http.StatusNotFound)
+        return
+    }
+    
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(user.ToResponse())
+}
+
+func (h *AuthHandler) generateToken(userID uint) (string, error) {
+    token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+        "user_id": userID,
+        "exp":     time.Now().Add(24 * time.Hour).Unix(),
+        "iat":     time.Now().Unix(),
+    })
+    
+    return token.SignedString([]byte(h.jwtSecret))
+}
+```
+
+### Instructions de démarrage
+
+1. **Créer la base de données**
+```sql
+CREATE DATABASE blog_db;
+```
+
+2. **Variables d'environnement (.env)**
+```bash
+SERVER_PORT=8080
+DATABASE_URL=postgres://user:password@localhost/blog_db?sslmode=disable
+JWT_SECRET=your-super-secret-jwt-key
+ENVIRONMENT=development
+LOG_LEVEL=info
+```
+
+3. **Lancer l'application**
+```bash
+go mod tidy
+go run main.go
+```
+
+4. **Tester l'API**
+```bash
+# Créer un utilisateur
+curl -X POST http://localhost:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","email":"alice@example.com","password":"password123"}'
+
+# Se connecter
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","password":"password123"}'
+
+# Créer un post (avec token)
+curl -X POST http://localhost:8080/api/posts \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"title":"Mon premier post","content":"Contenu du post...","status":"published"}'
+```
+
+## Projet 3 : Microservice de notification
+
+### Objectifs d'apprentissage
+- Architecture microservices
+- Message queues (Redis/RabbitMQ)
+- Health checks et monitoring
+- Docker et deployment
+
+### Structure du projet
+```
+notification-service/
+├── go.mod
+├── Dockerfile
+├── docker-compose.yml
+├── main.go
+├── config/
+│   └── config.go
+├── internal/
+│   ├── domain/
+│   │   ├── notification.go
+│   │   └── template.go
+│   ├── infrastructure/
+│   │   ├── redis/
+│   │   ├── email/
+│   │   └── sms/
+│   ├── application/
+│   │   └── notification_service.go
+│   └── interfaces/
+│       ├── http/
+│       └── queue/
+├── pkg/
+│   ├── logger/
+│   └── metrics/
+└── deployments/
+    ├── k8s/
+    └── docker/
+```
+
+**Exemple de worker pour les notifications**
+```go
+// internal/workers/notification_worker.go
+package workers
+
+import (
+    "context"
+    "encoding/json"
+    "log"
+    "time"
+    
+    "notification-service/internal/domain"
+    "notification-service/internal/services"
+    "github.com/go-redis/redis/v8"
+)
+
+type NotificationWorker struct {
+    redisClient         *redis.Client
+    notificationService *services.NotificationService
+    logger             *log.Logger
+}
+
+func NewNotificationWorker(redisClient *redis.Client, notificationService *services.NotificationService) *NotificationWorker {
+    return &NotificationWorker{
+        redisClient:         redisClient,
+        notificationService: notificationService,
+        logger:             log.New(os.Stdout, "[WORKER] ", log.LstdFlags),
+    }
+}
+
+func (w *NotificationWorker) Start(ctx context.Context) error {
+    w.logger.Println("Starting notification worker...")
+    
+    for {
+        select {
+        case <-ctx.Done():
+            w.logger.Println("Worker shutdown requested")
+            return nil
+        default:
+            if err := w.processMessages(ctx); err != nil {
+                w.logger.Printf("Error processing messages: %v", err)
+                time.Sleep(5 * time.Second)
+            }
+        }
+    }
+}
+
+func (w *NotificationWorker) processMessages(ctx context.Context) error {
+    result, err := w.redisClient.BRPop(ctx, 10*time.Second, "notifications").Result()
+    if err != nil {
+        if err == redis.Nil {
+            return nil // Timeout, continue
+        }
+        return err
+    }
+    
+    if len(result) < 2 {
+        return nil
+    }
+    
+    var notification domain.Notification
+    if err := json.Unmarshal([]byte(result[1]), &notification); err != nil {
+        w.logger.Printf("Failed to unmarshal notification: %v", err)
+        return nil
+    }
+    
+    w.logger.Printf("Processing notification: %s to %s", notification.Type, notification.Recipient)
+    
+    if err := w.notificationService.Send(ctx, &notification); err != nil {
+        w.logger.Printf("Failed to send notification: %v", err)
+        
+        // Retry logic
+        notification.RetryCount++
+        if notification.RetryCount < 3 {
+            w.requeueNotification(&notification)
+        } else {
+            w.logger.Printf("Max retries exceeded for notification %s", notification.ID)
+        }
+    } else {
+        w.logger.Printf("Successfully sent notification %s", notification.ID)
+    }
+    
+    return nil
+}
+
+func (w *NotificationWorker) requeueNotification(notification *domain.Notification) {
+    data, _ := json.Marshal(notification)
+    w.redisClient.LPush(context.Background(), "notifications", data)
+}
+```
+
+## Projet 4 : Système de monitoring
+
+### Objectifs d'apprentissage
+- Métriques avec Prometheus
+- Health checks
+- Logging structuré
+- Alerting
+
+**Exemple de middleware de métriques**
+```go
+// pkg/middleware/metrics.go
+package middleware
+
+import (
+    "net/http"
+    "strconv"
+    "time"
+    
+    "github.com/prometheus/client_golang/prometheus"
+    "github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var (
+    httpDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+        Name: "http_duration_seconds",
+        Help: "Duration of HTTP requests.",
+    }, []string{"path", "method", "status"})
+    
+    httpRequests = promauto.NewCounterVec(prometheus.CounterOpts{
+        Name: "http_requests_total",
+        Help: "Total number of HTTP requests.",
+    }, []string{"path", "method", "status"})
+)
+
+func PrometheusMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        start := time.Now()
+        
+        // Wrapper pour capturer le status code
+        wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+        
+        next.ServeHTTP(wrapped, r)
+        
+        duration := time.Since(start)
+        status := strconv.Itoa(wrapped.statusCode)
+        
+        httpDuration.WithLabelValues(r.URL.Path, r.Method, status).Observe(duration.Seconds())
+        httpRequests.WithLabelValues(r.URL.Path, r.Method, status).Inc()
+    })
+}
+
+type responseWriter struct {
+    http.ResponseWriter
+    statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+    rw.statusCode = code
+    rw.ResponseWriter.WriteHeader(code)
+}
+```
+
+## Exercices progressifs
+
+### Niveau débutant
+1. **CLI Calculator** - Calculatrice en ligne de commande avec historique
+2. **File Organizer** - Organise les fichiers par type/date
+3. **Password Generator** - Générateur de mots de passe sécurisés
+
+### Niveau intermédiaire  
+1. **Chat Server** - Serveur de chat en WebSocket
+2. **URL Shortener** - Service de raccourcissement d'URLs
+3. **Image Resizer** - Service de redimensionnement d'images
+
+### Niveau avancé
+1. **Distributed Cache** - Cache distribué avec consistency
+2. **Log Aggregator** - Agrégateur de logs avec recherche
+3. **API Gateway** - Gateway avec rate limiting et auth
+
+## Ressources pour aller plus loin
+
+### Librairies populaires
+- **Web**: Gin, Echo, Fiber
+- **Database**: GORM, SQLx, Ent
+- **Testing**: Testify, GoMock, Ginkgo
+- **CLI**: Cobra, Viper, Bubble Tea
+- **Monitoring**: Prometheus, OpenTelemetry
+
+### Patterns à explorer
+- **Clean Architecture** avec DDD
+- **CQRS** et Event Sourcing
+- **Circuit Breaker** et Bulkhead
+- **Saga** pattern pour les transactions distribuées
+
+### Déploiement
+- **Docker** et containerisation
+- **Kubernetes** pour l'orchestration
+- **CI/CD** avec GitHub Actions
+- **Cloud providers** (AWS, GCP, Azure)
+
+## Prochaine étape
+
+Excellent travail ! Vous avez maintenant :
+- ✅ Des projets concrets pour pratiquer
+- ✅ Une progression du CLI aux microservices
+- ✅ Des patterns industriels
+- ✅ Des bases pour le monitoring et le déploiement
+
+👉 **[Consolidons avec les bonnes pratiques](/bonnes-pratiques)**
+
+---
+
+> **💡 Conseil** : Commencez par le projet CLI, puis progressez vers l'API REST. Chaque projet introduit de nouveaux concepts tout en renforçant les acquis précédents !

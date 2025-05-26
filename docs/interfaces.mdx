@@ -1,0 +1,989 @@
+---
+title: Interfaces
+description: Interfaces, polymorphisme et composition en Go
+---
+
+# Interfaces en Go
+
+Les interfaces en Go sont un mécanisme puissant pour définir des contrats et obtenir du polymorphisme. Elles sont **implicites** - aucune déclaration explicite d'implémentation n'est nécessaire.
+
+## Concepts de base
+
+### Qu'est-ce qu'une interface ?
+Une interface définit un ensemble de méthodes. Tout type qui implémente ces méthodes satisfait automatiquement l'interface.
+
+```go
+package main
+
+import "fmt"
+
+// Définition d'une interface
+type Animal interface {
+    Crier() string
+    Bouger() string
+}
+
+// Types qui implémentent l'interface (implicitement)
+type Chien struct {
+    Nom string
+}
+
+func (c Chien) Crier() string {
+    return "Woof!"
+}
+
+func (c Chien) Bouger() string {
+    return c.Nom + " court"
+}
+
+type Chat struct {
+    Nom string
+}
+
+func (c Chat) Crier() string {
+    return "Miaou!"
+}
+
+func (c Chat) Bouger() string {
+    return c.Nom + " saute"
+}
+
+// Fonction polymorphe qui accepte n'importe quel Animal
+func faireParlerAnimal(a Animal) {
+    fmt.Printf("L'animal dit: %s\n", a.Crier())
+    fmt.Printf("L'animal: %s\n", a.Bouger())
+}
+
+func main() {
+    rex := Chien{Nom: "Rex"}
+    felix := Chat{Nom: "Felix"}
+    
+    // Même fonction, comportements différents
+    faireParlerAnimal(rex)
+    faireParlerAnimal(felix)
+}
+```
+
+### Interface vide : interface{}
+```go
+func main() {
+    var i interface{}  // Peut contenir n'importe quelle valeur
+    
+    i = 42
+    fmt.Printf("i = %v, type = %T\n", i, i)
+    
+    i = "hello"
+    fmt.Printf("i = %v, type = %T\n", i, i)
+    
+    i = []int{1, 2, 3}
+    fmt.Printf("i = %v, type = %T\n", i, i)
+}
+```
+
+## Interfaces standard importantes
+
+### fmt.Stringer
+```go
+package main
+
+import "fmt"
+
+type Personne struct {
+    Nom string
+    Age int
+}
+
+// Implémente fmt.Stringer
+func (p Personne) String() string {
+    return fmt.Sprintf("%s (%d ans)", p.Nom, p.Age)
+}
+
+func main() {
+    alice := Personne{Nom: "Alice", Age: 25}
+    
+    // fmt.Println utilise automatiquement String() si disponible
+    fmt.Println(alice)  // Alice (25 ans)
+    
+    // Équivalent à:
+    fmt.Println(alice.String())
+}
+```
+
+### error interface
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+// L'interface error est prédéfinie dans Go
+// type error interface {
+//     Error() string
+// }
+
+// Erreur personnalisée
+type ValidationError struct {
+    Field   string
+    Message string
+    Time    time.Time
+}
+
+func (e ValidationError) Error() string {
+    return fmt.Sprintf("[%s] Erreur dans %s: %s", 
+        e.Time.Format("15:04:05"), e.Field, e.Message)
+}
+
+func validerAge(age int) error {
+    if age < 0 {
+        return ValidationError{
+            Field:   "age",
+            Message: "ne peut pas être négatif",
+            Time:    time.Now(),
+        }
+    }
+    if age > 150 {
+        return ValidationError{
+            Field:   "age", 
+            Message: "semble irréaliste",
+            Time:    time.Now(),
+        }
+    }
+    return nil
+}
+
+func main() {
+    ages := []int{25, -5, 200, 30}
+    
+    for _, age := range ages {
+        if err := validerAge(age); err != nil {
+            fmt.Printf("Erreur pour age %d: %v\n", age, err)
+            
+            // Type assertion pour accéder aux champs spécifiques
+            if ve, ok := err.(ValidationError); ok {
+                fmt.Printf("  Champ: %s, Heure: %s\n", 
+                    ve.Field, ve.Time.Format("15:04:05"))
+            }
+        } else {
+            fmt.Printf("Age %d valide\n", age)
+        }
+    }
+}
+```
+
+### io.Reader et io.Writer
+```go
+package main
+
+import (
+    "fmt"
+    "io"
+    "strings"
+)
+
+// Fonction qui accepte n'importe quel Reader
+func lireContenu(r io.Reader) (string, error) {
+    data, err := io.ReadAll(r)
+    if err != nil {
+        return "", err
+    }
+    return string(data), nil
+}
+
+// Fonction qui accepte n'importe quel Writer  
+func ecrireMessage(w io.Writer, message string) error {
+    _, err := w.Write([]byte(message))
+    return err
+}
+
+func main() {
+    // strings.Reader implémente io.Reader
+    reader := strings.NewReader("Hello, Go interfaces!")
+    
+    contenu, err := lireContenu(reader)
+    if err != nil {
+        fmt.Println("Erreur:", err)
+        return
+    }
+    
+    fmt.Println("Contenu lu:", contenu)
+    
+    // strings.Builder implémente io.Writer
+    var builder strings.Builder
+    err = ecrireMessage(&builder, "Message écrit via interface!")
+    if err != nil {
+        fmt.Println("Erreur d'écriture:", err)
+        return
+    }
+    
+    fmt.Println("Contenu écrit:", builder.String())
+}
+```
+
+## Type assertions et type switches
+
+### Type assertions
+```go
+package main
+
+import "fmt"
+
+func analyseInterface(i interface{}) {
+    // Type assertion simple
+    if s, ok := i.(string); ok {
+        fmt.Printf("C'est une chaîne: %s (longueur: %d)\n", s, len(s))
+        return
+    }
+    
+    // Type assertion sans vérification (peut paniquer!)
+    // s := i.(string)  // DANGEREUX si i n'est pas string
+    
+    // Vérification de type avec une interface
+    if err, ok := i.(error); ok {
+        fmt.Printf("C'est une erreur: %v\n", err)
+        return
+    }
+    
+    fmt.Printf("Type non géré: %T\n", i)
+}
+
+func main() {
+    analyseInterface("Hello")
+    analyseInterface(42)
+    analyseInterface(fmt.Errorf("une erreur"))
+}
+```
+
+### Type switches
+```go
+package main
+
+import (
+    "fmt"
+    "reflect"
+)
+
+func traiterValeur(i interface{}) {
+    switch v := i.(type) {
+    case nil:
+        fmt.Println("Valeur nil")
+    case bool:
+        if v {
+            fmt.Println("Booléen vrai")
+        } else {
+            fmt.Println("Booléen faux")
+        }
+    case int:
+        fmt.Printf("Entier: %d\n", v)
+    case int64:
+        fmt.Printf("Entier 64 bits: %d\n", v)
+    case float64:
+        fmt.Printf("Float: %.2f\n", v)
+    case string:
+        fmt.Printf("Chaîne: '%s' (%d caractères)\n", v, len(v))
+    case []int:
+        fmt.Printf("Slice d'entiers: %v (longueur: %d)\n", v, len(v))
+    case map[string]int:
+        fmt.Printf("Map string->int: %v\n", v)
+    case fmt.Stringer:  // Interface
+        fmt.Printf("Implémente Stringer: %s\n", v.String())
+    case error:  // Interface
+        fmt.Printf("Erreur: %v\n", v)
+    default:
+        fmt.Printf("Type non géré: %T (valeur: %v)\n", v, v)
+    }
+}
+
+func main() {
+    valeurs := []interface{}{
+        nil,
+        true,
+        42,
+        int64(42),
+        3.14,
+        "Hello",
+        []int{1, 2, 3},
+        map[string]int{"a": 1, "b": 2},
+        fmt.Errorf("test error"),
+        struct{ Name string }{"test"},
+    }
+    
+    for i, val := range valeurs {
+        fmt.Printf("%d. ", i+1)
+        traiterValeur(val)
+    }
+}
+```
+
+## Composition d'interfaces
+
+### Interfaces composées
+```go
+package main
+
+import "fmt"
+
+// Interfaces de base
+type Reader interface {
+    Read() string
+}
+
+type Writer interface {
+    Write(data string) error
+}
+
+type Closer interface {
+    Close() error
+}
+
+// Interface composée
+type ReadWriter interface {
+    Reader
+    Writer
+}
+
+type ReadWriteCloser interface {
+    Reader
+    Writer
+    Closer
+}
+
+// Implémentation
+type Fichier struct {
+    nom     string
+    contenu string
+    ouvert  bool
+}
+
+func (f *Fichier) Read() string {
+    if !f.ouvert {
+        return ""
+    }
+    return f.contenu
+}
+
+func (f *Fichier) Write(data string) error {
+    if !f.ouvert {
+        return fmt.Errorf("fichier fermé")
+    }
+    f.contenu += data
+    return nil
+}
+
+func (f *Fichier) Close() error {
+    f.ouvert = false
+    fmt.Printf("Fichier %s fermé\n", f.nom)
+    return nil
+}
+
+func (f *Fichier) Open() {
+    f.ouvert = true
+    fmt.Printf("Fichier %s ouvert\n", f.nom)
+}
+
+// Fonctions utilisant les interfaces composées
+func copier(src Reader, dst Writer) error {
+    data := src.Read()
+    return dst.Write(data)
+}
+
+func traiterFichier(rwc ReadWriteCloser) {
+    defer rwc.Close()
+    
+    rwc.Write("Données importantes\n")
+    contenu := rwc.Read()
+    fmt.Printf("Contenu: %s", contenu)
+}
+
+func main() {
+    fichier := &Fichier{nom: "test.txt"}
+    fichier.Open()
+    
+    // Le fichier satisfait ReadWriteCloser
+    traiterFichier(fichier)
+}
+```
+
+### Interface avec méthodes optionnelles
+```go
+package main
+
+import "fmt"
+
+type BasicProcessor interface {
+    Process(data string) string
+}
+
+type OptionalValidator interface {
+    Validate(data string) error
+}
+
+type OptionalLogger interface {
+    Log(message string)
+}
+
+// Processeur simple
+type SimpleProcessor struct{}
+
+func (p SimpleProcessor) Process(data string) string {
+    return "Processed: " + data
+}
+
+// Processeur avancé avec validation et logging
+type AdvancedProcessor struct{}
+
+func (p AdvancedProcessor) Process(data string) string {
+    return "Advanced processing: " + data
+}
+
+func (p AdvancedProcessor) Validate(data string) error {
+    if len(data) == 0 {
+        return fmt.Errorf("données vides")
+    }
+    return nil
+}
+
+func (p AdvancedProcessor) Log(message string) {
+    fmt.Printf("[LOG] %s\n", message)
+}
+
+// Fonction qui utilise les interfaces optionnelles
+func traiterDonnees(processor BasicProcessor, data string) string {
+    // Validation optionnelle
+    if validator, ok := processor.(OptionalValidator); ok {
+        if err := validator.Validate(data); err != nil {
+            return fmt.Sprintf("Erreur de validation: %v", err)
+        }
+    }
+    
+    // Logging optionnel
+    if logger, ok := processor.(OptionalLogger); ok {
+        logger.Log(fmt.Sprintf("Traitement de: %s", data))
+    }
+    
+    result := processor.Process(data)
+    
+    // Logging du résultat
+    if logger, ok := processor.(OptionalLogger); ok {
+        logger.Log(fmt.Sprintf("Résultat: %s", result))
+    }
+    
+    return result
+}
+
+func main() {
+    simple := SimpleProcessor{}
+    advanced := AdvancedProcessor{}
+    
+    fmt.Println("=== Processeur simple ===")
+    result1 := traiterDonnees(simple, "test data")
+    fmt.Println("Résultat:", result1)
+    
+    fmt.Println("\n=== Processeur avancé ===")
+    result2 := traiterDonnees(advanced, "test data")
+    fmt.Println("Résultat:", result2)
+    
+    fmt.Println("\n=== Données invalides ===")
+    result3 := traiterDonnees(advanced, "")
+    fmt.Println("Résultat:", result3)
+}
+```
+
+## Patterns d'interfaces
+
+### Strategy Pattern
+```go
+package main
+
+import "fmt"
+
+// Interface pour les stratégies de tri
+type SortStrategy interface {
+    Sort([]int) []int
+}
+
+// Tri à bulles
+type BubbleSort struct{}
+
+func (bs BubbleSort) Sort(data []int) []int {
+    arr := make([]int, len(data))
+    copy(arr, data)
+    
+    n := len(arr)
+    for i := 0; i < n-1; i++ {
+        for j := 0; j < n-i-1; j++ {
+            if arr[j] > arr[j+1] {
+                arr[j], arr[j+1] = arr[j+1], arr[j]
+            }
+        }
+    }
+    fmt.Println("Utilisé: Bubble Sort")
+    return arr
+}
+
+// Tri par sélection
+type SelectionSort struct{}
+
+func (ss SelectionSort) Sort(data []int) []int {
+    arr := make([]int, len(data))
+    copy(arr, data)
+    
+    n := len(arr)
+    for i := 0; i < n-1; i++ {
+        minIdx := i
+        for j := i + 1; j < n; j++ {
+            if arr[j] < arr[minIdx] {
+                minIdx = j
+            }
+        }
+        arr[i], arr[minIdx] = arr[minIdx], arr[i]
+    }
+    fmt.Println("Utilisé: Selection Sort")
+    return arr
+}
+
+// Context qui utilise la stratégie
+type Sorter struct {
+    strategy SortStrategy
+}
+
+func (s *Sorter) SetStrategy(strategy SortStrategy) {
+    s.strategy = strategy
+}
+
+func (s *Sorter) Sort(data []int) []int {
+    if s.strategy == nil {
+        fmt.Println("Aucune stratégie définie")
+        return data
+    }
+    return s.strategy.Sort(data)
+}
+
+func main() {
+    data := []int{64, 34, 25, 12, 22, 11, 90}
+    sorter := &Sorter{}
+    
+    fmt.Printf("Données originales: %v\n", data)
+    
+    // Utiliser bubble sort
+    sorter.SetStrategy(BubbleSort{})
+    result1 := sorter.Sort(data)
+    fmt.Printf("Bubble sort: %v\n", result1)
+    
+    // Changer pour selection sort
+    sorter.SetStrategy(SelectionSort{})
+    result2 := sorter.Sort(data)
+    fmt.Printf("Selection sort: %v\n", result2)
+}
+```
+
+### Observer Pattern
+```go
+package main
+
+import "fmt"
+
+// Interface Observer
+type Observer interface {
+    Update(message string)
+}
+
+// Interface Subject
+type Subject interface {
+    Subscribe(Observer)
+    Unsubscribe(Observer)
+    Notify(message string)
+}
+
+// Implémentation Subject
+type NewsAgency struct {
+    observers []Observer
+}
+
+func (na *NewsAgency) Subscribe(observer Observer) {
+    na.observers = append(na.observers, observer)
+}
+
+func (na *NewsAgency) Unsubscribe(observer Observer) {
+    for i, obs := range na.observers {
+        if obs == observer {
+            na.observers = append(na.observers[:i], na.observers[i+1:]...)
+            break
+        }
+    }
+}
+
+func (na *NewsAgency) Notify(message string) {
+    for _, observer := range na.observers {
+        observer.Update(message)
+    }
+}
+
+func (na *NewsAgency) PublishNews(news string) {
+    fmt.Printf("📰 Agence publie: %s\n", news)
+    na.Notify(news)
+}
+
+// Implémentations Observer
+type EmailSubscriber struct {
+    email string
+}
+
+func (es EmailSubscriber) Update(message string) {
+    fmt.Printf("📧 Email envoyé à %s: %s\n", es.email, message)
+}
+
+type SMSSubscriber struct {
+    phone string
+}
+
+func (ss SMSSubscriber) Update(message string) {
+    fmt.Printf("📱 SMS envoyé à %s: %s\n", ss.phone, message)
+}
+
+type AppNotification struct {
+    userID string
+}
+
+func (an AppNotification) Update(message string) {
+    fmt.Printf("📱 Notification app pour %s: %s\n", an.userID, message)
+}
+
+func main() {
+    agency := &NewsAgency{}
+    
+    // Créer des abonnés
+    emailSub := EmailSubscriber{email: "alice@example.com"}
+    smsSub := SMSSubscriber{phone: "+33123456789"}
+    appSub := AppNotification{userID: "user123"}
+    
+    // S'abonner
+    agency.Subscribe(emailSub)
+    agency.Subscribe(smsSub)
+    agency.Subscribe(appSub)
+    
+    // Publier des nouvelles
+    agency.PublishNews("Nouvelle technologie révolutionnaire!")
+    
+    fmt.Println("\n--- Un abonné se désabonne ---")
+    agency.Unsubscribe(smsSub)
+    
+    agency.PublishNews("Mise à jour importante du système")
+}
+```
+
+## Interfaces avancées
+
+### Interface avec contraintes génériques (Go 1.18+)
+```go
+package main
+
+import "fmt"
+
+// Interface pour types ordonnables
+type Ordered interface {
+    ~int | ~int8 | ~int16 | ~int32 | ~int64 |
+    ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 |
+    ~float32 | ~float64 | ~string
+}
+
+// Fonction générique qui utilise l'interface
+func Min[T Ordered](a, b T) T {
+    if a < b {
+        return a
+    }
+    return b
+}
+
+func Max[T Ordered](a, b T) T {
+    if a > b {
+        return a
+    }
+    return b
+}
+
+// Interface plus complexe
+type Comparable[T any] interface {
+    CompareTo(other T) int  // -1: plus petit, 0: égal, 1: plus grand
+}
+
+type Version struct {
+    Major, Minor, Patch int
+}
+
+func (v Version) CompareTo(other Version) int {
+    if v.Major != other.Major {
+        if v.Major < other.Major {
+            return -1
+        }
+        return 1
+    }
+    if v.Minor != other.Minor {
+        if v.Minor < other.Minor {
+            return -1
+        }
+        return 1
+    }
+    if v.Patch != other.Patch {
+        if v.Patch < other.Patch {
+            return -1
+        }
+        return 1
+    }
+    return 0
+}
+
+func (v Version) String() string {
+    return fmt.Sprintf("v%d.%d.%d", v.Major, v.Minor, v.Patch)
+}
+
+func FindMax[T Comparable[T]](items []T) T {
+    if len(items) == 0 {
+        var zero T
+        return zero
+    }
+    
+    max := items[0]
+    for _, item := range items[1:] {
+        if item.CompareTo(max) > 0 {
+            max = item
+        }
+    }
+    return max
+}
+
+func main() {
+    // Utilisation avec types primitifs
+    fmt.Printf("Min(10, 20) = %d\n", Min(10, 20))
+    fmt.Printf("Max(3.14, 2.71) = %.2f\n", Max(3.14, 2.71))
+    fmt.Printf("Min(\"apple\", \"banana\") = %s\n", Min("apple", "banana"))
+    
+    // Utilisation avec type personnalisé
+    versions := []Version{
+        {1, 2, 3},
+        {2, 0, 1},
+        {1, 5, 0},
+        {2, 1, 0},
+    }
+    
+    maxVersion := FindMax(versions)
+    fmt.Printf("Version maximale: %s\n", maxVersion)
+}
+```
+
+### Interface pour middleware HTTP
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+    "net/http"
+    "time"
+)
+
+// Interface pour middleware
+type Middleware interface {
+    Handle(http.HandlerFunc) http.HandlerFunc
+}
+
+// Middleware de logging
+type LoggingMiddleware struct{}
+
+func (lm LoggingMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        start := time.Now()
+        log.Printf("Début %s %s", r.Method, r.URL.Path)
+        
+        next(w, r)
+        
+        duration := time.Since(start)
+        log.Printf("Fin %s %s (durée: %v)", r.Method, r.URL.Path, duration)
+    }
+}
+
+// Middleware d'authentification
+type AuthMiddleware struct {
+    validTokens map[string]bool
+}
+
+func NewAuthMiddleware() *AuthMiddleware {
+    return &AuthMiddleware{
+        validTokens: map[string]bool{
+            "token123": true,
+            "secret":   true,
+        },
+    }
+}
+
+func (am *AuthMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        token := r.Header.Get("Authorization")
+        if token == "" {
+            http.Error(w, "Token manquant", http.StatusUnauthorized)
+            return
+        }
+        
+        if !am.validTokens[token] {
+            http.Error(w, "Token invalide", http.StatusUnauthorized)
+            return
+        }
+        
+        next(w, r)
+    }
+}
+
+// Middleware de rate limiting
+type RateLimitMiddleware struct {
+    requests map[string]int
+    limit    int
+}
+
+func NewRateLimitMiddleware(limit int) *RateLimitMiddleware {
+    return &RateLimitMiddleware{
+        requests: make(map[string]int),
+        limit:    limit,
+    }
+}
+
+func (rlm *RateLimitMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        ip := r.RemoteAddr
+        rlm.requests[ip]++
+        
+        if rlm.requests[ip] > rlm.limit {
+            http.Error(w, "Rate limit dépassé", http.StatusTooManyRequests)
+            return
+        }
+        
+        next(w, r)
+    }
+}
+
+// Gestionnaire de middleware
+type MiddlewareStack struct {
+    middlewares []Middleware
+}
+
+func NewMiddlewareStack() *MiddlewareStack {
+    return &MiddlewareStack{}
+}
+
+func (ms *MiddlewareStack) Use(middleware Middleware) {
+    ms.middlewares = append(ms.middlewares, middleware)
+}
+
+func (ms *MiddlewareStack) Apply(handler http.HandlerFunc) http.HandlerFunc {
+    result := handler
+    
+    // Appliquer les middlewares en ordre inverse
+    for i := len(ms.middlewares) - 1; i >= 0; i-- {
+        result = ms.middlewares[i].Handle(result)
+    }
+    
+    return result
+}
+
+// Handler d'exemple
+func helloHandler(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintf(w, "Bonjour! Il est %s\n", time.Now().Format("15:04:05"))
+}
+
+func main() {
+    stack := NewMiddlewareStack()
+    
+    // Ajouter les middlewares
+    stack.Use(LoggingMiddleware{})
+    stack.Use(NewAuthMiddleware())
+    stack.Use(NewRateLimitMiddleware(5))
+    
+    // Appliquer la stack au handler
+    protectedHandler := stack.Apply(helloHandler)
+    
+    http.HandleFunc("/hello", protectedHandler)
+    
+    fmt.Println("Serveur démarré sur :8080")
+    fmt.Println("Testez avec: curl -H 'Authorization: token123' http://localhost:8080/hello")
+    
+    log.Fatal(http.ListenAndServe(":8080", nil))
+}
+```
+
+## Bonnes pratiques
+
+### 1. Interfaces petites et focalisées
+```go
+// ✅ Bon - interface petite et spécifique
+type Reader interface {
+    Read([]byte) (int, error)
+}
+
+// ❌ Évitez - interface trop large
+type MegaInterface interface {
+    Read() string
+    Write(string) error
+    Process() error
+    Validate() bool
+    Log(string)
+    Connect() error
+    Disconnect() error
+}
+```
+
+### 2. Acceptez des interfaces, retournez des types concrets
+```go
+// ✅ Bon - accepte une interface
+func ProcessData(r io.Reader) (*ProcessedData, error) {
+    // ...
+    return &ProcessedData{}, nil  // Retourne un type concret
+}
+
+// ❌ Évitez - retourner une interface si pas nécessaire
+func CreateReader() io.Reader {  
+    return &MyReader{}  // Rend les tests plus difficiles
+}
+```
+
+### 3. Définissez les interfaces près de leur utilisation
+```go
+// ✅ Bon - interface définie avec son utilisateur
+package service
+
+type UserRepository interface {
+    GetUser(id int) (*User, error)
+}
+
+func (s *UserService) GetUserProfile(repo UserRepository, id int) {
+    // ...
+}
+```
+
+### 4. Nommage d'interfaces
+```go
+// ✅ Bon - noms descriptifs
+type Writer interface { Write([]byte) (int, error) }
+type Stringer interface { String() string }
+type Handler interface { Handle() }
+
+// Convention: souvent -er pour les interfaces d'action
+type Processor interface { Process() }
+type Validator interface { Validate() error }
+```
+
+## Prochaine étape
+
+Excellent ! Vous maîtrisez maintenant :
+- ✅ Concepts des interfaces implicites de Go
+- ✅ Interfaces standard importantes (error, Stringer, io.Reader/Writer)
+- ✅ Type assertions et type switches
+- ✅ Composition d'interfaces
+- ✅ Patterns classiques (Strategy, Observer)
+- ✅ Interfaces avec génériques
+- ✅ Bonnes pratiques de design
+
+👉 **[Approfondissons la gestion d'erreurs](/gestion-erreurs)**
+
+---
+
+> **💡 Astuce** : En Go, les interfaces sont généralement découvertes, pas planifiées. Commencez par écrire du code concret, puis extrayez les interfaces quand vous en avez besoin !

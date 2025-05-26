@@ -1,0 +1,1122 @@
+---
+title: Concurrence
+description: Goroutines, channels, select et patterns de concurrence en Go
+---
+
+# Concurrence en Go
+
+La concurrence est l'une des forces principales de Go. Le langage fournit des primitives simples mais puissantes pour écrire des programmes concurrents efficaces.
+
+## Goroutines : concurrence légère
+
+### Qu'est-ce qu'une goroutine ?
+Une goroutine est une fonction qui s'exécute de manière concurrente avec d'autres goroutines dans le même espace mémoire. C'est plus léger qu'un thread système.
+
+### Lancement d'une goroutine
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+func direBonjour(nom string) {
+    for i := 0; i < 5; i++ {
+        fmt.Printf("Bonjour %s! (%d)\n", nom, i)
+        time.Sleep(500 * time.Millisecond)
+    }
+}
+
+func main() {
+    // Exécution séquentielle
+    fmt.Println("=== Exécution séquentielle ===")
+    direBonjour("Alice")
+    direBonjour("Bob")
+    
+    fmt.Println("\n=== Exécution concurrente ===")
+    // Lancement de goroutines
+    go direBonjour("Alice")  // Exécution concurrente
+    go direBonjour("Bob")    // Exécution concurrente
+    
+    // Attendre que les goroutines se terminent
+    time.Sleep(3 * time.Second)
+    fmt.Println("Fin du programme")
+}
+```
+
+### Fonction anonyme en goroutine
+```go
+func main() {
+    // Goroutine avec fonction anonyme
+    go func() {
+        fmt.Println("Goroutine anonyme")
+    }()
+    
+    // Goroutine avec paramètres
+    message := "Hello from goroutine"
+    go func(msg string) {
+        fmt.Println(msg)
+    }(message)
+    
+    time.Sleep(1 * time.Second)
+}
+```
+
+### Problème de partage d'état
+```go
+package main
+
+import (
+    "fmt"
+    "sync"
+    "time"
+)
+
+func main() {
+    counter := 0
+    
+    // ❌ Problème : race condition
+    for i := 0; i < 1000; i++ {
+        go func() {
+            counter++  // Accès concurrent non sécurisé
+        }()
+    }
+    
+    time.Sleep(1 * time.Second)
+    fmt.Printf("Valeur finale (incorrecte): %d\n", counter)  // Valeur imprévisible
+    
+    // ✅ Solution avec sync.Mutex
+    counter = 0
+    var mutex sync.Mutex
+    
+    for i := 0; i < 1000; i++ {
+        go func() {
+            mutex.Lock()
+            counter++
+            mutex.Unlock()
+        }()
+    }
+    
+    time.Sleep(1 * time.Second)
+    fmt.Printf("Valeur finale (correcte): %d\n", counter)  // 1000
+}
+```
+
+## Channels : communication entre goroutines
+
+### Channels basiques
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+func main() {
+    // Créer un channel
+    messages := make(chan string)
+    
+    // Goroutine qui envoie un message
+    go func() {
+        time.Sleep(1 * time.Second)
+        messages <- "Ping"  // Envoi dans le channel
+    }()
+    
+    // Réception du message (bloquant)
+    msg := <-messages
+    fmt.Println("Reçu:", msg)
+}
+```
+
+### Channels avec buffer
+```go
+func main() {
+    // Channel sans buffer (synchrone)
+    ch1 := make(chan string)
+    
+    // Channel avec buffer (asynchrone)
+    ch2 := make(chan string, 2)
+    
+    // Envoi dans channel bufferisé (non bloquant si buffer non plein)
+    ch2 <- "Message 1"
+    ch2 <- "Message 2"
+    
+    fmt.Println(<-ch2)  // "Message 1"
+    fmt.Println(<-ch2)  // "Message 2"
+    
+    // Fermeture d'un channel
+    close(ch2)
+    
+    // Test si un channel est fermé
+    value, ok := <-ch2
+    if !ok {
+        fmt.Println("Channel fermé")
+    }
+}
+```
+
+### Directions des channels
+```go
+// Channel bidirectionnel
+func worker(jobs chan int, results chan int) {
+    for job := range jobs {
+        results <- job * 2
+    }
+}
+
+// Channel en lecture seule
+func consumer(results <-chan int) {
+    for result := range results {
+        fmt.Printf("Résultat: %d\n", result)
+    }
+}
+
+// Channel en écriture seule
+func producer(jobs chan<- int) {
+    for i := 1; i <= 5; i++ {
+        jobs <- i
+    }
+    close(jobs)
+}
+
+func main() {
+    jobs := make(chan int, 5)
+    results := make(chan int, 5)
+    
+    // Lancer le producteur
+    go producer(jobs)
+    
+    // Lancer le worker
+    go worker(jobs, results)
+    
+    // Attendre et fermer results
+    go func() {
+        // Attendre que jobs soit fermé et traité
+        time.Sleep(100 * time.Millisecond)
+        close(results)
+    }()
+    
+    // Consommer les résultats
+    consumer(results)
+}
+```
+
+## Patterns de communication
+
+### Worker Pool Pattern
+```go
+package main
+
+import (
+    "fmt"
+    "sync"
+    "time"
+)
+
+type Job struct {
+    ID     int
+    Data   string
+    Result chan string
+}
+
+func worker(id int, jobs <-chan Job, wg *sync.WaitGroup) {
+    defer wg.Done()
+    
+    for job := range jobs {
+        fmt.Printf("Worker %d commence le job %d\n", id, job.ID)
+        
+        // Simulation de travail
+        time.Sleep(time.Duration(100+job.ID*50) * time.Millisecond)
+        
+        result := fmt.Sprintf("Job %d traité par worker %d", job.ID, id)
+        job.Result <- result
+        
+        fmt.Printf("Worker %d termine le job %d\n", id, job.ID)
+    }
+}
+
+func main() {
+    const numWorkers = 3
+    const numJobs = 9
+    
+    jobs := make(chan Job, numJobs)
+    var wg sync.WaitGroup
+    
+    // Lancer les workers
+    for w := 1; w <= numWorkers; w++ {
+        wg.Add(1)
+        go worker(w, jobs, &wg)
+    }
+    
+    // Créer et envoyer les jobs
+    for j := 1; j <= numJobs; j++ {
+        job := Job{
+            ID:     j,
+            Data:   fmt.Sprintf("data-%d", j),
+            Result: make(chan string, 1),
+        }
+        jobs <- job
+        
+        // Récupérer le résultat
+        go func(job Job) {
+            result := <-job.Result
+            fmt.Printf("Résultat reçu: %s\n", result)
+        }(job)
+    }
+    
+    close(jobs)
+    wg.Wait()
+    
+    fmt.Println("Tous les jobs terminés")
+}
+```
+
+### Fan-out/Fan-in Pattern
+```go
+package main
+
+import (
+    "fmt"
+    "math/rand"
+    "sync"
+    "time"
+)
+
+// Fan-out : distribuer le travail à plusieurs goroutines
+func fanOut(input <-chan int, workers int) []<-chan int {
+    outputs := make([]<-chan int, workers)
+    
+    for i := 0; i < workers; i++ {
+        output := make(chan int)
+        outputs[i] = output
+        
+        go func(out chan<- int) {
+            defer close(out)
+            for n := range input {
+                // Simulation de traitement
+                time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
+                out <- n * n  // Carré du nombre
+            }
+        }(output)
+    }
+    
+    return outputs
+}
+
+// Fan-in : combiner les résultats de plusieurs goroutines
+func fanIn(inputs ...<-chan int) <-chan int {
+    output := make(chan int)
+    var wg sync.WaitGroup
+    
+    for _, input := range inputs {
+        wg.Add(1)
+        go func(in <-chan int) {
+            defer wg.Done()
+            for value := range in {
+                output <- value
+            }
+        }(input)
+    }
+    
+    go func() {
+        wg.Wait()
+        close(output)
+    }()
+    
+    return output
+}
+
+func main() {
+    // Source de données
+    input := make(chan int)
+    
+    // Envoyer des données
+    go func() {
+        defer close(input)
+        for i := 1; i <= 10; i++ {
+            input <- i
+        }
+    }()
+    
+    // Fan-out vers 3 workers
+    outputs := fanOut(input, 3)
+    
+    // Fan-in pour combiner les résultats
+    result := fanIn(outputs...)
+    
+    // Collecter tous les résultats
+    var results []int
+    for value := range result {
+        results = append(results, value)
+    }
+    
+    fmt.Printf("Résultats: %v\n", results)
+}
+```
+
+## Select : multiplexage de channels
+
+### Select basique
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+func main() {
+    ch1 := make(chan string)
+    ch2 := make(chan string)
+    
+    go func() {
+        time.Sleep(1 * time.Second)
+        ch1 <- "Depuis ch1"
+    }()
+    
+    go func() {
+        time.Sleep(2 * time.Second)
+        ch2 <- "Depuis ch2"
+    }()
+    
+    // Select attend le premier channel disponible
+    select {
+    case msg1 := <-ch1:
+        fmt.Println("Reçu:", msg1)
+    case msg2 := <-ch2:
+        fmt.Println("Reçu:", msg2)
+    }
+}
+```
+
+### Select avec timeout
+```go
+func main() {
+    ch := make(chan string)
+    
+    go func() {
+        time.Sleep(3 * time.Second)  // Délai plus long que le timeout
+        ch <- "Message tardif"
+    }()
+    
+    select {
+    case msg := <-ch:
+        fmt.Println("Reçu:", msg)
+    case <-time.After(2 * time.Second):
+        fmt.Println("Timeout atteint!")
+    }
+}
+```
+
+### Select avec default (non-bloquant)
+```go
+func main() {
+    ch := make(chan string)
+    
+    select {
+    case msg := <-ch:
+        fmt.Println("Reçu:", msg)
+    default:
+        fmt.Println("Aucun message disponible")
+    }
+    
+    // Envoi non-bloquant
+    select {
+    case ch <- "Hello":
+        fmt.Println("Message envoyé")
+    default:
+        fmt.Println("Impossible d'envoyer")
+    }
+}
+```
+
+### Select dans une boucle
+```go
+func main() {
+    ch1 := make(chan string)
+    ch2 := make(chan string)
+    quit := make(chan bool)
+    
+    // Producteurs
+    go func() {
+        for i := 0; i < 5; i++ {
+            time.Sleep(500 * time.Millisecond)
+            ch1 <- fmt.Sprintf("ch1-%d", i)
+        }
+    }()
+    
+    go func() {
+        for i := 0; i < 3; i++ {
+            time.Sleep(800 * time.Millisecond)
+            ch2 <- fmt.Sprintf("ch2-%d", i)
+        }
+    }()
+    
+    // Signal d'arrêt après 4 secondes
+    go func() {
+        time.Sleep(4 * time.Second)
+        quit <- true
+    }()
+    
+    // Consommateur avec select
+    for {
+        select {
+        case msg1 := <-ch1:
+            fmt.Println("Depuis ch1:", msg1)
+        case msg2 := <-ch2:
+            fmt.Println("Depuis ch2:", msg2)
+        case <-quit:
+            fmt.Println("Arrêt demandé")
+            return
+        default:
+            fmt.Println("En attente...")
+            time.Sleep(200 * time.Millisecond)
+        }
+    }
+}
+```
+
+## Synchronisation avec sync
+
+### sync.WaitGroup
+```go
+package main
+
+import (
+    "fmt"
+    "sync"
+    "time"
+)
+
+func worker(id int, wg *sync.WaitGroup) {
+    defer wg.Done()  // Décrémenter le compteur à la fin
+    
+    fmt.Printf("Worker %d commence\n", id)
+    time.Sleep(time.Duration(id) * time.Second)
+    fmt.Printf("Worker %d termine\n", id)
+}
+
+func main() {
+    var wg sync.WaitGroup
+    
+    for i := 1; i <= 5; i++ {
+        wg.Add(1)  // Incrémenter le compteur
+        go worker(i, &wg)
+    }
+    
+    wg.Wait()  // Attendre que le compteur atteigne 0
+    fmt.Println("Tous les workers terminés")
+}
+```
+
+### sync.Mutex (exclusion mutuelle)
+```go
+package main
+
+import (
+    "fmt"
+    "sync"
+)
+
+type Counter struct {
+    mu    sync.Mutex
+    value int
+}
+
+func (c *Counter) Increment() {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    c.value++
+}
+
+func (c *Counter) Get() int {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    return c.value
+}
+
+func main() {
+    counter := &Counter{}
+    var wg sync.WaitGroup
+    
+    // Lancer 1000 goroutines qui incrémentent
+    for i := 0; i < 1000; i++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            counter.Increment()
+        }()
+    }
+    
+    wg.Wait()
+    fmt.Printf("Valeur finale: %d\n", counter.Get())  // 1000
+}
+```
+
+### sync.RWMutex (lecture/écriture)
+```go
+package main
+
+import (
+    "fmt"
+    "sync"
+    "time"
+)
+
+type SafeMap struct {
+    mu   sync.RWMutex
+    data map[string]int
+}
+
+func NewSafeMap() *SafeMap {
+    return &SafeMap{
+        data: make(map[string]int),
+    }
+}
+
+func (sm *SafeMap) Set(key string, value int) {
+    sm.mu.Lock()
+    defer sm.mu.Unlock()
+    sm.data[key] = value
+}
+
+func (sm *SafeMap) Get(key string) (int, bool) {
+    sm.mu.RLock()  // Lecture seule
+    defer sm.mu.RUnlock()
+    value, ok := sm.data[key]
+    return value, ok
+}
+
+func (sm *SafeMap) GetAll() map[string]int {
+    sm.mu.RLock()
+    defer sm.mu.RUnlock()
+    
+    // Copie pour éviter les modifications concurrentes
+    result := make(map[string]int)
+    for k, v := range sm.data {
+        result[k] = v
+    }
+    return result
+}
+
+func main() {
+    sm := NewSafeMap()
+    var wg sync.WaitGroup
+    
+    // Writers
+    for i := 0; i < 5; i++ {
+        wg.Add(1)
+        go func(id int) {
+            defer wg.Done()
+            key := fmt.Sprintf("key%d", id)
+            sm.Set(key, id*10)
+            fmt.Printf("Écrit: %s = %d\n", key, id*10)
+        }(i)
+    }
+    
+    // Readers
+    for i := 0; i < 10; i++ {
+        wg.Add(1)
+        go func(id int) {
+            defer wg.Done()
+            time.Sleep(50 * time.Millisecond)
+            all := sm.GetAll()
+            fmt.Printf("Lecteur %d: %v\n", id, all)
+        }(i)
+    }
+    
+    wg.Wait()
+}
+```
+
+### sync.Once (exécution unique)
+```go
+package main
+
+import (
+    "fmt"
+    "sync"
+)
+
+var once sync.Once
+
+func initializeResource() {
+    fmt.Println("Initialisation coûteuse...")
+    // Simulation d'une initialisation coûteuse
+}
+
+func getResource() {
+    once.Do(initializeResource)  // N'exécute qu'une seule fois
+    fmt.Println("Utilisation de la ressource")
+}
+
+func main() {
+    var wg sync.WaitGroup
+    
+    // Plusieurs goroutines tentent d'initialiser
+    for i := 0; i < 5; i++ {
+        wg.Add(1)
+        go func(id int) {
+            defer wg.Done()
+            fmt.Printf("Goroutine %d appelle getResource\n", id)
+            getResource()
+        }(i)
+    }
+    
+    wg.Wait()
+    // "Initialisation coûteuse..." n'apparaît qu'une fois
+}
+```
+
+## Context : gestion de l'annulation
+
+### Context basique
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "time"
+)
+
+func operation(ctx context.Context, name string) {
+    for i := 0; i < 5; i++ {
+        select {
+        case <-ctx.Done():
+            fmt.Printf("%s: opération annulée (%v)\n", name, ctx.Err())
+            return
+        default:
+            fmt.Printf("%s: étape %d\n", name, i+1)
+            time.Sleep(500 * time.Millisecond)
+        }
+    }
+    fmt.Printf("%s: opération terminée\n", name)
+}
+
+func main() {
+    // Context avec timeout
+    ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+    defer cancel()
+    
+    go operation(ctx, "Worker1")
+    go operation(ctx, "Worker2")
+    
+    time.Sleep(3 * time.Second)
+    fmt.Println("Fin du programme")
+}
+```
+
+### Context avec valeurs
+```go
+func main() {
+    // Context avec valeurs
+    ctx := context.WithValue(context.Background(), "userID", 12345)
+    ctx = context.WithValue(ctx, "sessionID", "abc123")
+    
+    processRequest(ctx)
+}
+
+func processRequest(ctx context.Context) {
+    userID := ctx.Value("userID")
+    sessionID := ctx.Value("sessionID")
+    
+    fmt.Printf("Traitement pour user %v, session %v\n", userID, sessionID)
+    
+    // Passer le context aux fonctions suivantes
+    handleDatabase(ctx)
+}
+
+func handleDatabase(ctx context.Context) {
+    userID := ctx.Value("userID")
+    fmt.Printf("Requête DB pour user %v\n", userID)
+}
+```
+
+## Exemples pratiques avancés
+
+### Système de cache concurrent
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "sync"
+    "time"
+)
+
+type CacheItem struct {
+    Value     interface{}
+    ExpiresAt time.Time
+}
+
+type ConcurrentCache struct {
+    mu    sync.RWMutex
+    items map[string]CacheItem
+    stop  chan struct{}
+    wg    sync.WaitGroup
+}
+
+func NewConcurrentCache() *ConcurrentCache {
+    cache := &ConcurrentCache{
+        items: make(map[string]CacheItem),
+        stop:  make(chan struct{}),
+    }
+    
+    // Goroutine de nettoyage automatique
+    cache.wg.Add(1)
+    go cache.cleanup()
+    
+    return cache
+}
+
+func (c *ConcurrentCache) Set(key string, value interface{}, ttl time.Duration) {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    
+    c.items[key] = CacheItem{
+        Value:     value,
+        ExpiresAt: time.Now().Add(ttl),
+    }
+}
+
+func (c *ConcurrentCache) Get(key string) (interface{}, bool) {
+    c.mu.RLock()
+    defer c.mu.RUnlock()
+    
+    item, exists := c.items[key]
+    if !exists || time.Now().After(item.ExpiresAt) {
+        return nil, false
+    }
+    
+    return item.Value, true
+}
+
+func (c *ConcurrentCache) GetOrCompute(key string, compute func() interface{}, ttl time.Duration) interface{} {
+    // Tentative de lecture
+    if value, found := c.Get(key); found {
+        return value
+    }
+    
+    // Calcul et stockage (avec protection contre les calculs concurrents)
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    
+    // Double vérification après acquisition du lock
+    if item, exists := c.items[key]; exists && time.Now().Before(item.ExpiresAt) {
+        return item.Value
+    }
+    
+    value := compute()
+    c.items[key] = CacheItem{
+        Value:     value,
+        ExpiresAt: time.Now().Add(ttl),
+    }
+    
+    return value
+}
+
+func (c *ConcurrentCache) cleanup() {
+    defer c.wg.Done()
+    ticker := time.NewTicker(1 * time.Minute)
+    defer ticker.Stop()
+    
+    for {
+        select {
+        case <-ticker.C:
+            c.removeExpired()
+        case <-c.stop:
+            return
+        }
+    }
+}
+
+func (c *ConcurrentCache) removeExpired() {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    
+    now := time.Now()
+    for key, item := range c.items {
+        if now.After(item.ExpiresAt) {
+            delete(c.items, key)
+        }
+    }
+}
+
+func (c *ConcurrentCache) Stop() {
+    close(c.stop)
+    c.wg.Wait()
+}
+
+func (c *ConcurrentCache) Size() int {
+    c.mu.RLock()
+    defer c.mu.RUnlock()
+    return len(c.items)
+}
+
+// Exemple d'utilisation
+func expensiveComputation(id int) interface{} {
+    fmt.Printf("Calcul coûteux pour ID %d...\n", id)
+    time.Sleep(1 * time.Second)
+    return fmt.Sprintf("Résultat pour %d", id)
+}
+
+func main() {
+    cache := NewConcurrentCache()
+    defer cache.Stop()
+    
+    var wg sync.WaitGroup
+    
+    // Simuler plusieurs requêtes concurrentes
+    for i := 0; i < 10; i++ {
+        wg.Add(1)
+        go func(id int) {
+            defer wg.Done()
+            
+            key := fmt.Sprintf("data_%d", id%3)  // Seulement 3 clés différentes
+            
+            result := cache.GetOrCompute(key, func() interface{} {
+                return expensiveComputation(id % 3)
+            }, 5*time.Second)
+            
+            fmt.Printf("Goroutine %d got: %v\n", id, result)
+        }(i)
+    }
+    
+    wg.Wait()
+    fmt.Printf("Cache size: %d\n", cache.Size())
+}
+```
+
+### Rate Limiter concurrent
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "sync"
+    "time"
+)
+
+type RateLimiter struct {
+    rate     time.Duration
+    capacity int
+    tokens   chan struct{}
+    mu       sync.Mutex
+    lastTime time.Time
+}
+
+func NewRateLimiter(rate time.Duration, capacity int) *RateLimiter {
+    rl := &RateLimiter{
+        rate:     rate,
+        capacity: capacity,
+        tokens:   make(chan struct{}, capacity),
+        lastTime: time.Now(),
+    }
+    
+    // Remplir initialement le bucket
+    for i := 0; i < capacity; i++ {
+        rl.tokens <- struct{}{}
+    }
+    
+    // Goroutine de remplissage
+    go rl.refill()
+    
+    return rl
+}
+
+func (rl *RateLimiter) refill() {
+    ticker := time.NewTicker(rl.rate)
+    defer ticker.Stop()
+    
+    for range ticker.C {
+        select {
+        case rl.tokens <- struct{}{}:
+            // Token ajouté
+        default:
+            // Bucket plein
+        }
+    }
+}
+
+func (rl *RateLimiter) Allow() bool {
+    select {
+    case <-rl.tokens:
+        return true
+    default:
+        return false
+    }
+}
+
+func (rl *RateLimiter) Wait(ctx context.Context) error {
+    select {
+    case <-rl.tokens:
+        return nil
+    case <-ctx.Done():
+        return ctx.Err()
+    }
+}
+
+func (rl *RateLimiter) WaitWithTimeout(timeout time.Duration) bool {
+    ctx, cancel := context.WithTimeout(context.Background(), timeout)
+    defer cancel()
+    
+    return rl.Wait(ctx) == nil
+}
+
+// Exemple d'utilisation
+func simulateAPICall(id int, rl *RateLimiter) {
+    fmt.Printf("Tentative d'appel API %d...\n", id)
+    
+    if rl.Allow() {
+        fmt.Printf("✅ Appel API %d autorisé\n", id)
+        // Simulation d'appel API
+        time.Sleep(100 * time.Millisecond)
+    } else {
+        fmt.Printf("❌ Appel API %d bloqué (rate limit)\n", id)
+    }
+}
+
+func simulateAPICallWithWait(id int, rl *RateLimiter) {
+    fmt.Printf("Tentative d'appel API %d (avec attente)...\n", id)
+    
+    if rl.WaitWithTimeout(2 * time.Second) {
+        fmt.Printf("✅ Appel API %d autorisé après attente\n", id)
+        time.Sleep(100 * time.Millisecond)
+    } else {
+        fmt.Printf("❌ Appel API %d timeout\n", id)
+    }
+}
+
+func main() {
+    // Rate limiter: 1 token toutes les 500ms, capacity de 3
+    rl := NewRateLimiter(500*time.Millisecond, 3)
+    
+    var wg sync.WaitGroup
+    
+    fmt.Println("=== Test sans attente ===")
+    // Test rapide sans attente
+    for i := 0; i < 8; i++ {
+        wg.Add(1)
+        go func(id int) {
+            defer wg.Done()
+            simulateAPICall(id, rl)
+        }(i)
+    }
+    wg.Wait()
+    
+    time.Sleep(1 * time.Second)
+    
+    fmt.Println("\n=== Test avec attente ===")
+    // Test avec attente
+    for i := 0; i < 5; i++ {
+        wg.Add(1)
+        go func(id int) {
+            defer wg.Done()
+            simulateAPICallWithWait(id+10, rl)
+        }(i)
+    }
+    wg.Wait()
+}
+```
+
+## Bonnes pratiques de concurrence
+
+### 1. Préférez les channels aux mutex quand possible
+```go
+// ✅ Bon - Communication par channels
+func counter() (chan<- struct{}, <-chan int) {
+    increment := make(chan struct{})
+    count := make(chan int)
+    
+    go func() {
+        n := 0
+        for range increment {
+            n++
+            count <- n
+        }
+    }()
+    
+    return increment, count
+}
+
+// ❌ Évitez les mutex complexes
+type ComplexCounter struct {
+    mu1, mu2 sync.Mutex
+    value1, value2 int
+}
+```
+
+### 2. Évitez les goroutines qui fuient
+```go
+// ✅ Bon - goroutine avec arrêt propre
+func startWorker(ctx context.Context) {
+    ticker := time.NewTicker(1 * time.Second)
+    defer ticker.Stop()
+    
+    for {
+        select {
+        case <-ticker.C:
+            // Travail
+        case <-ctx.Done():
+            return  // Arrêt propre
+        }
+    }
+}
+
+// ❌ Évitez - goroutine sans fin
+func badWorker() {
+    for {
+        time.Sleep(1 * time.Second)
+        // Pas de moyen d'arrêter cette goroutine !
+    }
+}
+```
+
+### 3. Utilisez des buffers appropriés
+```go
+// ✅ Buffer adapté à votre use case
+jobs := make(chan Job, 100)  // Buffer pour lisser les pics
+
+// ❌ Évitez les gros buffers inutiles
+massive := make(chan int, 1000000)  // Probablement trop
+```
+
+### 4. Fermez les channels côté producteur
+```go
+// ✅ Bon pattern
+func producer(out chan<- int) {
+    defer close(out)  // Toujours fermer côté producteur
+    
+    for i := 0; i < 10; i++ {
+        out <- i
+    }
+}
+
+func consumer(in <-chan int) {
+    for value := range in {  // Termine quand le channel est fermé
+        fmt.Println(value)
+    }
+}
+```
+
+## Prochaine étape
+
+Excellent ! Vous maîtrisez maintenant :
+- ✅ Goroutines et exécution concurrente
+- ✅ Channels et communication
+- ✅ Patterns de concurrence (worker pools, fan-out/fan-in)
+- ✅ Select et multiplexage
+- ✅ Synchronisation avec sync
+- ✅ Context pour l'annulation
+- ✅ Exemples pratiques avancés
+
+👉 **[Découvrons les interfaces et le polymorphisme](/interfaces)**
+
+---
+
+> **💡 Astuce** : "Don't communicate by sharing memory; share memory by communicating" - Utilisez les channels pour faire communiquer vos goroutines plutôt que de partager des variables !

@@ -1,0 +1,1047 @@
+---
+title: Gestion d'erreurs
+description: Patterns de gestion d'erreurs, wrapping, et bonnes pratiques en Go
+---
+
+# Gestion d'erreurs en Go
+
+Go adopte une approche explicite pour la gestion d'erreurs. Pas d'exceptions, mais des valeurs d'erreur qui doivent être vérifiées explicitement.
+
+## Concepts de base
+
+### L'interface error
+```go
+// L'interface error est prédéfinie dans Go
+type error interface {
+    Error() string
+}
+```
+
+### Création d'erreurs simples
+```go
+package main
+
+import (
+    "errors"
+    "fmt"
+)
+
+func diviser(a, b float64) (float64, error) {
+    if b == 0 {
+        // Créer une erreur simple
+        return 0, errors.New("division par zéro")
+    }
+    return a / b, nil
+}
+
+func calculerRacine(x float64) (float64, error) {
+    if x < 0 {
+        // Erreur formatée
+        return 0, fmt.Errorf("impossible de calculer la racine de %g", x)
+    }
+    return math.Sqrt(x), nil
+}
+
+func main() {
+    // Pattern classique de gestion d'erreur
+    resultat, err := diviser(10, 0)
+    if err != nil {
+        fmt.Printf("Erreur: %v\n", err)
+        return
+    }
+    fmt.Printf("Résultat: %g\n", resultat)
+    
+    // Avec une fonction qui réussit
+    racine, err := calculerRacine(16)
+    if err != nil {
+        fmt.Printf("Erreur: %v\n", err)
+        return
+    }
+    fmt.Printf("Racine: %g\n", racine)
+}
+```
+
+### Le pattern "comma ok"
+```go
+package main
+
+import "fmt"
+
+type Cache map[string]string
+
+func (c Cache) Get(key string) (string, bool) {
+    value, found := c[key]
+    return value, found
+}
+
+func (c Cache) GetWithDefault(key, defaultValue string) string {
+    if value, found := c.Get(key); found {
+        return value
+    }
+    return defaultValue
+}
+
+func main() {
+    cache := Cache{
+        "user:1": "Alice",
+        "user:2": "Bob",
+    }
+    
+    // Vérification explicite
+    if value, found := cache.Get("user:1"); found {
+        fmt.Printf("Trouvé: %s\n", value)
+    } else {
+        fmt.Println("Non trouvé")
+    }
+    
+    // Avec valeur par défaut
+    name := cache.GetWithDefault("user:999", "Inconnu")
+    fmt.Printf("Nom: %s\n", name)
+}
+```
+
+## Erreurs personnalisées
+
+### Erreurs avec contexte
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+type ValidationError struct {
+    Field     string
+    Value     interface{}
+    Message   string
+    Timestamp time.Time
+}
+
+func (e ValidationError) Error() string {
+    return fmt.Sprintf("erreur de validation sur '%s': %s (valeur: %v)", 
+        e.Field, e.Message, e.Value)
+}
+
+func (e ValidationError) IsTemporary() bool {
+    return false  // Erreur de validation n'est jamais temporaire
+}
+
+type NetworkError struct {
+    Op        string
+    URL       string
+    Timestamp time.Time
+    Retries   int
+}
+
+func (e NetworkError) Error() string {
+    return fmt.Sprintf("erreur réseau lors de %s vers %s (tentatives: %d)", 
+        e.Op, e.URL, e.Retries)
+}
+
+func (e NetworkError) IsTemporary() bool {
+    return e.Retries < 3  // Temporaire si moins de 3 tentatives
+}
+
+// Interface pour erreurs temporaires
+type TemporaryError interface {
+    error
+    IsTemporary() bool
+}
+
+func validerEmail(email string) error {
+    if email == "" {
+        return ValidationError{
+            Field:     "email",
+            Value:     email,
+            Message:   "ne peut pas être vide",
+            Timestamp: time.Now(),
+        }
+    }
+    
+    if !strings.Contains(email, "@") {
+        return ValidationError{
+            Field:     "email",
+            Value:     email,
+            Message:   "format invalide",
+            Timestamp: time.Now(),
+        }
+    }
+    
+    return nil
+}
+
+func appelAPI(url string) error {
+    // Simulation d'un appel qui échoue
+    return NetworkError{
+        Op:        "GET",
+        URL:       url,
+        Timestamp: time.Now(),
+        Retries:   1,
+    }
+}
+
+func traiterErreur(err error) {
+    if err == nil {
+        return
+    }
+    
+    fmt.Printf("Erreur: %v\n", err)
+    
+    // Vérifier si l'erreur est temporaire
+    if tempErr, ok := err.(TemporaryError); ok {
+        if tempErr.IsTemporary() {
+            fmt.Println("→ Cette erreur est temporaire, on peut réessayer")
+        } else {
+            fmt.Println("→ Cette erreur n'est pas temporaire")
+        }
+    }
+    
+    // Type assertion pour accéder aux détails
+    switch e := err.(type) {
+    case ValidationError:
+        fmt.Printf("→ Champ en erreur: %s\n", e.Field)
+        fmt.Printf("→ Heure: %s\n", e.Timestamp.Format("15:04:05"))
+    case NetworkError:
+        fmt.Printf("→ URL: %s\n", e.URL)
+        fmt.Printf("→ Tentatives: %d\n", e.Retries)
+    }
+}
+
+func main() {
+    // Test d'erreur de validation
+    err1 := validerEmail("")
+    traiterErreur(err1)
+    
+    fmt.Println()
+    
+    // Test d'erreur réseau
+    err2 := appelAPI("https://api.example.com/users")
+    traiterErreur(err2)
+}
+```
+
+### Erreurs sentinelles
+```go
+package main
+
+import (
+    "errors"
+    "fmt"
+)
+
+// Erreurs sentinelles - variables globales d'erreurs
+var (
+    ErrNotFound      = errors.New("élément non trouvé")
+    ErrUnauthorized  = errors.New("accès non autorisé")
+    ErrInvalidInput  = errors.New("entrée invalide")
+    ErrServiceUnavailable = errors.New("service indisponible")
+)
+
+type User struct {
+    ID   int
+    Name string
+    Role string
+}
+
+type UserService struct {
+    users map[int]User
+}
+
+func NewUserService() *UserService {
+    return &UserService{
+        users: map[int]User{
+            1: {ID: 1, Name: "Alice", Role: "admin"},
+            2: {ID: 2, Name: "Bob", Role: "user"},
+        },
+    }
+}
+
+func (s *UserService) GetUser(id int) (*User, error) {
+    user, exists := s.users[id]
+    if !exists {
+        return nil, ErrNotFound
+    }
+    return &user, nil
+}
+
+func (s *UserService) DeleteUser(currentUserRole string, targetID int) error {
+    if currentUserRole != "admin" {
+        return ErrUnauthorized
+    }
+    
+    if _, exists := s.users[targetID]; !exists {
+        return ErrNotFound
+    }
+    
+    delete(s.users, targetID)
+    return nil
+}
+
+func (s *UserService) CreateUser(name, role string) (*User, error) {
+    if name == "" {
+        return nil, ErrInvalidInput
+    }
+    
+    // Simulation d'une condition de service
+    if len(s.users) >= 10 {
+        return nil, ErrServiceUnavailable
+    }
+    
+    newID := len(s.users) + 1
+    user := User{ID: newID, Name: name, Role: role}
+    s.users[newID] = user
+    
+    return &user, nil
+}
+
+func handleUserOperation(service *UserService) {
+    // Test de récupération d'utilisateur
+    user, err := service.GetUser(999)
+    if err != nil {
+        switch err {
+        case ErrNotFound:
+            fmt.Println("❌ Utilisateur non trouvé")
+        case ErrUnauthorized:
+            fmt.Println("❌ Accès refusé")
+        default:
+            fmt.Printf("❌ Erreur inattendue: %v\n", err)
+        }
+    } else {
+        fmt.Printf("✅ Utilisateur trouvé: %s\n", user.Name)
+    }
+    
+    // Test de suppression
+    err = service.DeleteUser("user", 1)
+    if err != nil {
+        if errors.Is(err, ErrUnauthorized) {
+            fmt.Println("❌ Seuls les admins peuvent supprimer des utilisateurs")
+        } else if errors.Is(err, ErrNotFound) {
+            fmt.Println("❌ Utilisateur à supprimer non trouvé")
+        }
+    }
+    
+    // Test de création
+    newUser, err := service.CreateUser("Charlie", "user")
+    if err != nil {
+        switch err {
+        case ErrInvalidInput:
+            fmt.Println("❌ Données d'entrée invalides")
+        case ErrServiceUnavailable:
+            fmt.Println("❌ Service temporairement indisponible")
+        }
+    } else {
+        fmt.Printf("✅ Utilisateur créé: %s (ID: %d)\n", newUser.Name, newUser.ID)
+    }
+}
+
+func main() {
+    service := NewUserService()
+    handleUserOperation(service)
+}
+```
+
+## Wrapping d'erreurs (Go 1.13+)
+
+### fmt.Errorf avec %w
+```go
+package main
+
+import (
+    "errors"
+    "fmt"
+    "os"
+)
+
+func lireConfiguration(filename string) (map[string]string, error) {
+    file, err := os.Open(filename)
+    if err != nil {
+        // Wrapper l'erreur avec contexte
+        return nil, fmt.Errorf("impossible d'ouvrir le fichier de configuration %s: %w", filename, err)
+    }
+    defer file.Close()
+    
+    // Simulation d'une erreur de parsing
+    if filename == "bad.conf" {
+        return nil, fmt.Errorf("erreur de parsing du fichier %s: %w", filename, errors.New("format invalide"))
+    }
+    
+    // Simulation de configuration
+    config := map[string]string{
+        "host": "localhost",
+        "port": "8080",
+    }
+    
+    return config, nil
+}
+
+func initialiserApplication() error {
+    config, err := lireConfiguration("app.conf")
+    if err != nil {
+        // Wrapper à nouveau avec plus de contexte
+        return fmt.Errorf("échec d'initialisation de l'application: %w", err)
+    }
+    
+    fmt.Printf("Configuration chargée: %v\n", config)
+    return nil
+}
+
+func main() {
+    err := initialiserApplication()
+    if err != nil {
+        fmt.Printf("Erreur: %v\n", err)
+        
+        // Unwrapping pour trouver l'erreur originale
+        var pathError *os.PathError
+        if errors.As(err, &pathError) {
+            fmt.Printf("Erreur de fichier détectée:\n")
+            fmt.Printf("  - Opération: %s\n", pathError.Op)
+            fmt.Printf("  - Chemin: %s\n", pathError.Path)
+            fmt.Printf("  - Erreur système: %v\n", pathError.Err)
+        }
+        
+        // Vérifier des erreurs spécifiques
+        if errors.Is(err, os.ErrNotExist) {
+            fmt.Println("→ Le fichier n'existe pas")
+        } else if errors.Is(err, os.ErrPermission) {
+            fmt.Println("→ Permissions insuffisantes")
+        }
+    }
+}
+```
+
+### Chaîne d'erreurs complexe
+```go
+package main
+
+import (
+    "errors"
+    "fmt"
+    "time"
+)
+
+// Erreurs de base
+var (
+    ErrDatabaseConnection = errors.New("connexion base de données échouée")
+    ErrInvalidQuery      = errors.New("requête invalide")
+    ErrTimeout           = errors.New("timeout")
+)
+
+// Couche base de données
+func connectDB() error {
+    // Simulation d'échec de connexion
+    return ErrDatabaseConnection
+}
+
+func executeQuery(query string) error {
+    if err := connectDB(); err != nil {
+        return fmt.Errorf("échec de connexion pour la requête '%s': %w", query, err)
+    }
+    
+    if query == "" {
+        return fmt.Errorf("requête vide: %w", ErrInvalidQuery)
+    }
+    
+    // Simulation de timeout
+    if query == "SLOW_QUERY" {
+        return fmt.Errorf("timeout lors de l'exécution de '%s': %w", query, ErrTimeout)
+    }
+    
+    return nil
+}
+
+// Couche service
+func getUserByID(id int) (*User, error) {
+    if id <= 0 {
+        return nil, fmt.Errorf("ID utilisateur invalide %d: %w", id, ErrInvalidInput)
+    }
+    
+    query := fmt.Sprintf("SELECT * FROM users WHERE id = %d", id)
+    if err := executeQuery(query); err != nil {
+        return nil, fmt.Errorf("échec de récupération de l'utilisateur %d: %w", id, err)
+    }
+    
+    return &User{ID: id, Name: "Test User"}, nil
+}
+
+// Couche contrôleur
+func handleGetUser(userID string) {
+    id := 0 // Simulation de parsing échoué
+    
+    user, err := getUserByID(id)
+    if err != nil {
+        fmt.Printf("Erreur dans handleGetUser: %v\n", err)
+        
+        // Analyser la chaîne d'erreurs
+        analyzeError(err)
+    } else {
+        fmt.Printf("Utilisateur récupéré: %+v\n", user)
+    }
+}
+
+func analyzeError(err error) {
+    fmt.Println("\n🔍 Analyse de l'erreur:")
+    
+    // Unwrap pour voir toute la chaîne
+    current := err
+    level := 0
+    
+    for current != nil {
+        fmt.Printf("  %d. %v\n", level, current)
+        current = errors.Unwrap(current)
+        level++
+    }
+    
+    fmt.Println("\n🎯 Vérifications spécifiques:")
+    
+    // Vérifications avec errors.Is()
+    if errors.Is(err, ErrDatabaseConnection) {
+        fmt.Println("  - Problème de connexion base de données détecté")
+    }
+    
+    if errors.Is(err, ErrInvalidInput) {
+        fmt.Println("  - Entrée invalide détectée")
+    }
+    
+    if errors.Is(err, ErrTimeout) {
+        fmt.Println("  - Timeout détecté")
+    }
+    
+    // Vérifications avec errors.As()
+    var validationErr ValidationError
+    if errors.As(err, &validationErr) {
+        fmt.Printf("  - Erreur de validation: champ %s\n", validationErr.Field)
+    }
+}
+
+func main() {
+    fmt.Println("=== Test avec ID invalide ===")
+    handleGetUser("invalid")
+    
+    fmt.Println("\n=== Test avec requête lente ===")
+    // Simulation d'une requête qui timeout
+    err := executeQuery("SLOW_QUERY")
+    if err != nil {
+        fmt.Printf("Erreur de requête: %v\n", err)
+        analyzeError(err)
+    }
+}
+```
+
+## Patterns de gestion d'erreurs
+
+### Retry avec backoff
+```go
+package main
+
+import (
+    "errors"
+    "fmt"
+    "math/rand"
+    "time"
+)
+
+type RetryConfig struct {
+    MaxAttempts int
+    BaseDelay   time.Duration
+    MaxDelay    time.Duration
+    Multiplier  float64
+}
+
+func DefaultRetryConfig() RetryConfig {
+    return RetryConfig{
+        MaxAttempts: 3,
+        BaseDelay:   100 * time.Millisecond,
+        MaxDelay:    5 * time.Second,
+        Multiplier:  2.0,
+    }
+}
+
+// Interface pour erreurs temporaires
+type TemporaryError interface {
+    error
+    IsTemporary() bool
+}
+
+type ServiceError struct {
+    message   string
+    temporary bool
+    code      int
+}
+
+func (e ServiceError) Error() string {
+    return e.message
+}
+
+func (e ServiceError) IsTemporary() bool {
+    return e.temporary
+}
+
+// Fonction qui peut échouer temporairement
+func unreliableService() error {
+    // 70% de chance d'échouer temporairement
+    if rand.Float32() < 0.7 {
+        return ServiceError{
+            message:   "service temporairement indisponible",
+            temporary: true,
+            code:      503,
+        }
+    }
+    
+    // 10% de chance d'échouer définitivement
+    if rand.Float32() < 0.1 {
+        return ServiceError{
+            message:   "erreur de configuration",
+            temporary: false,
+            code:      500,
+        }
+    }
+    
+    return nil // Succès
+}
+
+func retryWithBackoff(operation func() error, config RetryConfig) error {
+    var lastErr error
+    delay := config.BaseDelay
+    
+    for attempt := 1; attempt <= config.MaxAttempts; attempt++ {
+        fmt.Printf("Tentative %d/%d...\n", attempt, config.MaxAttempts)
+        
+        err := operation()
+        if err == nil {
+            fmt.Printf("✅ Succès à la tentative %d\n", attempt)
+            return nil
+        }
+        
+        lastErr = err
+        
+        // Vérifier si l'erreur est temporaire
+        if tempErr, ok := err.(TemporaryError); ok && !tempErr.IsTemporary() {
+            fmt.Printf("❌ Erreur permanente: %v\n", err)
+            return err
+        }
+        
+        if attempt < config.MaxAttempts {
+            fmt.Printf("⏳ Échec, retry dans %v (erreur: %v)\n", delay, err)
+            time.Sleep(delay)
+            
+            // Exponential backoff avec jitter
+            delay = time.Duration(float64(delay) * config.Multiplier)
+            if delay > config.MaxDelay {
+                delay = config.MaxDelay
+            }
+            
+            // Ajouter du jitter (±25%)
+            jitter := time.Duration(rand.Float64() * float64(delay) * 0.5)
+            delay = delay + jitter - jitter/2
+        }
+    }
+    
+    return fmt.Errorf("échec après %d tentatives, dernière erreur: %w", config.MaxAttempts, lastErr)
+}
+
+func main() {
+    rand.Seed(time.Now().UnixNano())
+    
+    config := DefaultRetryConfig()
+    
+    fmt.Println("=== Test de retry avec backoff ===")
+    err := retryWithBackoff(unreliableService, config)
+    if err != nil {
+        fmt.Printf("💥 Échec final: %v\n", err)
+    }
+}
+```
+
+### Circuit Breaker pattern
+```go
+package main
+
+import (
+    "errors"
+    "fmt"
+    "sync"
+    "time"
+)
+
+type CircuitState int
+
+const (
+    Closed CircuitState = iota
+    Open
+    HalfOpen
+)
+
+func (s CircuitState) String() string {
+    switch s {
+    case Closed:
+        return "CLOSED"
+    case Open:
+        return "OPEN"
+    case HalfOpen:
+        return "HALF_OPEN"
+    default:
+        return "UNKNOWN"
+    }
+}
+
+type CircuitBreakerConfig struct {
+    FailureThreshold int
+    RecoveryTimeout  time.Duration
+    SuccessThreshold int
+}
+
+type CircuitBreaker struct {
+    config           CircuitBreakerConfig
+    state            CircuitState
+    failures         int
+    successes        int
+    lastFailureTime  time.Time
+    mu               sync.RWMutex
+}
+
+var (
+    ErrCircuitOpen = errors.New("circuit breaker ouvert")
+)
+
+func NewCircuitBreaker(config CircuitBreakerConfig) *CircuitBreaker {
+    return &CircuitBreaker{
+        config: config,
+        state:  Closed,
+    }
+}
+
+func (cb *CircuitBreaker) Execute(operation func() error) error {
+    // Vérifier l'état avant exécution
+    if !cb.canExecute() {
+        return ErrCircuitOpen
+    }
+    
+    // Exécuter l'opération
+    err := operation()
+    
+    // Mettre à jour l'état en fonction du résultat
+    cb.recordResult(err)
+    
+    return err
+}
+
+func (cb *CircuitBreaker) canExecute() bool {
+    cb.mu.RLock()
+    defer cb.mu.RUnlock()
+    
+    switch cb.state {
+    case Closed:
+        return true
+    case Open:
+        // Vérifier si on peut passer en half-open
+        if time.Since(cb.lastFailureTime) > cb.config.RecoveryTimeout {
+            return true
+        }
+        return false
+    case HalfOpen:
+        return true
+    default:
+        return false
+    }
+}
+
+func (cb *CircuitBreaker) recordResult(err error) {
+    cb.mu.Lock()
+    defer cb.mu.Unlock()
+    
+    if err != nil {
+        cb.recordFailure()
+    } else {
+        cb.recordSuccess()
+    }
+}
+
+func (cb *CircuitBreaker) recordFailure() {
+    cb.failures++
+    cb.successes = 0
+    cb.lastFailureTime = time.Now()
+    
+    switch cb.state {
+    case Closed:
+        if cb.failures >= cb.config.FailureThreshold {
+            cb.state = Open
+            fmt.Printf("🔴 Circuit breaker OUVERT (%d échecs)\n", cb.failures)
+        }
+    case HalfOpen:
+        cb.state = Open
+        fmt.Printf("🔴 Circuit breaker OUVERT (échec en half-open)\n")
+    }
+}
+
+func (cb *CircuitBreaker) recordSuccess() {
+    cb.failures = 0
+    cb.successes++
+    
+    switch cb.state {
+    case Open:
+        cb.state = HalfOpen
+        cb.successes = 1
+        fmt.Printf("🟡 Circuit breaker HALF-OPEN\n")
+    case HalfOpen:
+        if cb.successes >= cb.config.SuccessThreshold {
+            cb.state = Closed
+            fmt.Printf("🟢 Circuit breaker FERMÉ\n")
+        }
+    }
+}
+
+func (cb *CircuitBreaker) GetState() CircuitState {
+    cb.mu.RLock()
+    defer cb.mu.RUnlock()
+    return cb.state
+}
+
+func (cb *CircuitBreaker) GetStats() (CircuitState, int, int) {
+    cb.mu.RLock()
+    defer cb.mu.RUnlock()
+    return cb.state, cb.failures, cb.successes
+}
+
+// Service simulé qui peut échouer
+func flakyService(failureRate float32) func() error {
+    return func() error {
+        if rand.Float32() < failureRate {
+            return errors.New("service indisponible")
+        }
+        return nil
+    }
+}
+
+func main() {
+    rand.Seed(time.Now().UnixNano())
+    
+    config := CircuitBreakerConfig{
+        FailureThreshold: 3,
+        RecoveryTimeout:  2 * time.Second,
+        SuccessThreshold: 2,
+    }
+    
+    cb := NewCircuitBreaker(config)
+    
+    // Service qui échoue 80% du temps initialement
+    service := flakyService(0.8)
+    
+    fmt.Println("=== Test Circuit Breaker ===")
+    
+    // Phase 1: Provoquer l'ouverture du circuit
+    fmt.Println("\nPhase 1: Provocation d'échecs...")
+    for i := 0; i < 10; i++ {
+        err := cb.Execute(service)
+        state, failures, successes := cb.GetStats()
+        
+        if err != nil {
+            if errors.Is(err, ErrCircuitOpen) {
+                fmt.Printf("%d. ❌ Circuit ouvert, requête bloquée\n", i+1)
+            } else {
+                fmt.Printf("%d. ❌ Service failed: %v\n", i+1, err)
+            }
+        } else {
+            fmt.Printf("%d. ✅ Service réussi\n", i+1)
+        }
+        
+        fmt.Printf("   État: %s, Échecs: %d, Succès: %d\n", state, failures, successes)
+        time.Sleep(200 * time.Millisecond)
+    }
+    
+    // Phase 2: Attendre et améliorer le service
+    fmt.Println("\nPhase 2: Attente de recovery...")
+    time.Sleep(3 * time.Second)
+    
+    // Améliorer le service (seulement 20% d'échec)
+    service = flakyService(0.2)
+    
+    fmt.Println("\nPhase 3: Test de récupération...")
+    for i := 0; i < 10; i++ {
+        err := cb.Execute(service)
+        state, failures, successes := cb.GetStats()
+        
+        if err != nil {
+            if errors.Is(err, ErrCircuitOpen) {
+                fmt.Printf("%d. ❌ Circuit ouvert, requête bloquée\n", i+1)
+            } else {
+                fmt.Printf("%d. ❌ Service failed: %v\n", i+1, err)
+            }
+        } else {
+            fmt.Printf("%d. ✅ Service réussi\n", i+1)
+        }
+        
+        fmt.Printf("   État: %s, Échecs: %d, Succès: %d\n", state, failures, successes)
+        time.Sleep(500 * time.Millisecond)
+    }
+}
+```
+
+## Validation d'erreurs avancée
+
+### Erreurs avec stack trace
+```go
+package main
+
+import (
+    "fmt"
+    "runtime"
+    "strings"
+)
+
+type ErrorWithStack struct {
+    message string
+    stack   []uintptr
+}
+
+func NewErrorWithStack(message string) *ErrorWithStack {
+    const depth = 32
+    var pcs [depth]uintptr
+    n := runtime.Callers(2, pcs[:])
+    
+    return &ErrorWithStack{
+        message: message,
+        stack:   pcs[0:n],
+    }
+}
+
+func (e *ErrorWithStack) Error() string {
+    return e.message
+}
+
+func (e *ErrorWithStack) StackTrace() string {
+    var lines []string
+    frames := runtime.CallersFrames(e.stack)
+    
+    for {
+        frame, more := frames.Next()
+        if !more {
+            break
+        }
+        
+        line := fmt.Sprintf("%s\n\t%s:%d", frame.Function, frame.File, frame.Line)
+        lines = append(lines, line)
+    }
+    
+    return strings.Join(lines, "\n")
+}
+
+func level3() error {
+    return NewErrorWithStack("erreur au niveau 3")
+}
+
+func level2() error {
+    if err := level3(); err != nil {
+        return fmt.Errorf("erreur au niveau 2: %w", err)
+    }
+    return nil
+}
+
+func level1() error {
+    if err := level2(); err != nil {
+        return fmt.Errorf("erreur au niveau 1: %w", err)
+    }
+    return nil
+}
+
+func main() {
+    err := level1()
+    if err != nil {
+        fmt.Printf("Erreur: %v\n", err)
+        
+        // Extraire le stack trace
+        var stackErr *ErrorWithStack
+        if errors.As(err, &stackErr) {
+            fmt.Println("\nStack trace:")
+            fmt.Println(stackErr.StackTrace())
+        }
+    }
+}
+```
+
+## Bonnes pratiques
+
+### 1. Vérifiez toujours les erreurs
+```go
+// ✅ Bon
+result, err := operation()
+if err != nil {
+    return fmt.Errorf("operation failed: %w", err)
+}
+
+// ❌ Évitez - ignorer les erreurs
+result, _ := operation()  // Dangereux !
+```
+
+### 2. Propagez avec contexte
+```go
+// ✅ Bon - ajoutez du contexte
+func ProcessUser(id int) error {
+    user, err := getUserFromDB(id)
+    if err != nil {
+        return fmt.Errorf("failed to process user %d: %w", id, err)
+    }
+    // ...
+}
+
+// ❌ Évitez - perte de contexte
+func ProcessUser(id int) error {
+    user, err := getUserFromDB(id)
+    if err != nil {
+        return err  // Perte d'information
+    }
+    // ...
+}
+```
+
+### 3. Utilisez des erreurs sentinelles pour les cas attendus
+```go
+// ✅ Bon - erreurs sentinelles
+var ErrUserNotFound = errors.New("user not found")
+
+func GetUser(id int) (*User, error) {
+    // ...
+    if !found {
+        return nil, ErrUserNotFound
+    }
+    // ...
+}
+
+// Vérification
+if errors.Is(err, ErrUserNotFound) {
+    // Gérer le cas spécifique
+}
+```
+
+### 4. Logguez au bon niveau
+```go
+// ✅ Bon - log à la frontière
+func APIHandler(w http.ResponseWriter, r *http.Request) {
+    err := processRequest(r)
+    if err != nil {
+        log.Printf("API error: %v", err)  // Log ici
+        http.Error(w, "Internal error", 500)
+    }
+}
+
+func processRequest(r *http.Request) error {
+    // Ne pas logger ici, juste retourner l'erreur
+    return businessLogic()
+}
+```
+
+## Prochaine étape
+
+Excellent ! Vous maîtrisez maintenant :
+- ✅ Gestion explicite d'erreurs avec l'interface error
+- ✅ Création d'erreurs personnalisées avec contexte
+- ✅ Erreurs sentinelles et wrapping d'erreurs
+- ✅ Patterns avancés (retry, circuit breaker)
+- ✅ Debugging avec stack traces
+- ✅ Bonnes pratiques de propagation d'erreurs
+
+👉 **[Apprenons à tester notre code Go](/tests)**
+
+---
+
+> **💡 Astuce** : En Go, les erreurs sont des valeurs comme les autres. Traitez-les avec autant de soin que vos données métier - elles font partie de votre API !

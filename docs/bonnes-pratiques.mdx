@@ -1,0 +1,1218 @@
+---
+title: Bonnes pratiques
+description: Guide des meilleures pratiques pour développer en Go
+---
+
+# Bonnes pratiques Go
+
+Ce guide consolide les meilleures pratiques pour écrire du code Go maintenable, performant et idiomatique. Ces pratiques sont issues de l'expérience de la communauté Go et des équipes de Google.
+
+## Organisation du code
+
+### Structure de projet standard
+
+#### Projet simple (CLI/librairie)
+```
+mon-projet/
+├── go.mod
+├── go.sum
+├── main.go
+├── README.md
+├── LICENSE
+└── internal/           # Code privé au projet
+    ├── config/
+    ├── handlers/
+    └── models/
+```
+
+#### Projet complexe (service/API)
+```
+mon-service/
+├── go.mod
+├── go.sum
+├── main.go
+├── README.md
+├── LICENSE
+├── .env.example
+├── Dockerfile
+├── docker-compose.yml
+├── cmd/                # Points d'entrée multiples
+│   ├── server/
+│   │   └── main.go
+│   └── migrator/
+│       └── main.go
+├── internal/           # Code privé au projet
+│   ├── config/
+│   ├── domain/         # Modèles métier
+│   ├── handlers/       # HTTP handlers
+│   ├── middleware/
+│   ├── repository/     # Accès aux données
+│   ├── services/       # Logique métier
+│   └── errors/
+├── pkg/                # Code réutilisable publiquement
+│   ├── logger/
+│   ├── database/
+│   └── validator/
+├── api/                # Définitions API (OpenAPI, protobuf)
+│   └── openapi.yaml
+├── web/                # Assets web
+│   ├── static/
+│   └── templates/
+├── migrations/         # Migrations de base de données
+├── deployments/        # Configurations de déploiement
+│   ├── docker/
+│   └── kubernetes/
+├── scripts/            # Scripts de build et déploiement
+├── docs/               # Documentation
+└── tests/              # Tests d'intégration
+    ├── fixtures/
+    └── integration/
+```
+
+### Nommage des packages
+
+#### ✅ Bonnes pratiques
+```go
+// Noms courts et descriptifs
+package http
+package json
+package user
+package auth
+
+// Un package = une responsabilité
+package emailservice  // Pas juste "service"
+package userrepo     // Pas juste "repository"
+```
+
+#### ❌ À éviter
+```go
+package utils        // Trop générique
+package helpers      // Trop vague  
+package common       // Ne dit rien
+package lib          // Inutile
+package base         // Trop abstrait
+```
+
+### Import et organisation
+
+#### Groupement des imports
+```go
+package main
+
+import (
+    // 1. Standard library
+    "context"
+    "fmt"
+    "log"
+    "net/http"
+    
+    // 2. External dependencies
+    "github.com/gorilla/mux"
+    "github.com/sirupsen/logrus"
+    
+    // 3. Internal packages
+    "monprojet/internal/config"
+    "monprojet/internal/handlers"
+    "monprojet/pkg/database"
+)
+```
+
+#### Alias d'imports
+```go
+import (
+    // Alias pour éviter les conflits
+    gorillaMux "github.com/gorilla/mux"
+    netHttp "net/http"
+    
+    // Alias courts pour les packages longs
+    "github.com/prometheus/client_golang/prometheus/promhttp"
+)
+```
+
+## Nommage et conventions
+
+### Variables et fonctions
+
+#### ✅ Conventions Go
+```go
+// Variables: camelCase
+var userName string
+var maxRetries int
+var isActive bool
+
+// Constantes: CamelCase ou UPPER_CASE
+const MaxConnections = 100
+const API_VERSION = "v1"
+
+// Fonctions exportées: CamelCase
+func GetUserByID(id int) (*User, error) {}
+func CreateUserAccount(email string) error {}
+
+// Fonctions privées: camelCase
+func validateEmail(email string) bool {}
+func generateToken() string {}
+
+// Types: CamelCase
+type UserService struct {}
+type APIResponse struct {}
+```
+
+#### Acronymes et abréviations
+```go
+// ✅ Bon - acronymes en majuscules
+type HTTPClient struct {}
+type XMLParser struct {}
+type URLBuilder struct {}
+type JSONResponse struct {}
+
+// ❌ Évitez
+type HttpClient struct {}
+type XmlParser struct {}
+type UrlBuilder struct {}
+```
+
+### Nommage de variables
+
+#### Variables d'interface
+```go
+// ✅ Interfaces avec suffixe -er
+type Reader interface {
+    Read([]byte) (int, error)
+}
+
+type Writer interface {
+    Write([]byte) (int, error)
+}
+
+type UserRepository interface {
+    GetUser(id int) (*User, error)
+}
+```
+
+#### Variables booléennes
+```go
+// ✅ Préfixes is, has, can, should
+var isValid bool
+var hasPermission bool
+var canExecute bool
+var shouldRetry bool
+
+// ❌ Évitez les négations
+var notReady bool      // Préférez: isReady
+var disabled bool      // Préférez: isEnabled
+```
+
+### Nommage de méthodes
+
+#### Getters et setters
+```go
+type User struct {
+    name string
+    age  int
+}
+
+// ✅ Pas de préfixe Get/Set
+func (u *User) Name() string {
+    return u.name
+}
+
+func (u *User) SetName(name string) {
+    u.name = name
+}
+
+// ✅ Ou directement des champs exportés si approprié
+type User struct {
+    Name string
+    Age  int
+}
+```
+
+## Gestion d'erreurs
+
+### Patterns d'erreurs
+
+#### Erreurs avec contexte
+```go
+// ✅ Ajoutez du contexte aux erreurs
+func ProcessUser(id int) error {
+    user, err := getUserFromDB(id)
+    if err != nil {
+        return fmt.Errorf("failed to get user %d: %w", id, err)
+    }
+    
+    if err := validateUser(user); err != nil {
+        return fmt.Errorf("user %d validation failed: %w", id, err)
+    }
+    
+    return nil
+}
+```
+
+#### Erreurs sentinelles
+```go
+// ✅ Erreurs prédéfinies pour les cas attendus
+var (
+    ErrUserNotFound = errors.New("user not found")
+    ErrInvalidInput = errors.New("invalid input")
+    ErrUnauthorized = errors.New("unauthorized access")
+)
+
+func GetUser(id int) (*User, error) {
+    if id <= 0 {
+        return nil, ErrInvalidInput
+    }
+    
+    user := findUser(id)
+    if user == nil {
+        return nil, ErrUserNotFound
+    }
+    
+    return user, nil
+}
+
+// Utilisation
+user, err := GetUser(123)
+if err != nil {
+    switch {
+    case errors.Is(err, ErrUserNotFound):
+        // Gérer cas spécifique
+    case errors.Is(err, ErrInvalidInput):
+        // Gérer input invalide
+    default:
+        // Erreur inattendue
+    }
+}
+```
+
+#### Erreurs typées
+```go
+// ✅ Erreurs avec information structurée
+type ValidationError struct {
+    Field   string
+    Value   interface{}
+    Message string
+}
+
+func (e ValidationError) Error() string {
+    return fmt.Sprintf("validation failed for field '%s': %s (value: %v)", 
+        e.Field, e.Message, e.Value)
+}
+
+// Vérification de type
+var validationErr ValidationError
+if errors.As(err, &validationErr) {
+    log.Printf("Field in error: %s", validationErr.Field)
+}
+```
+
+### Anti-patterns d'erreurs
+
+#### ❌ À éviter
+```go
+// Ignorer les erreurs
+result, _ := someFunction()
+
+// Panic pour des erreurs récupérables
+if err != nil {
+    panic(err)  // Réservé aux erreurs irrécupérables
+}
+
+// Log et retourner l'erreur (double gestion)
+if err != nil {
+    log.Printf("Error: %v", err)
+    return err  // Choisir: log OU retourner
+}
+
+// Erreurs trop génériques
+return errors.New("error")  // Pas informatif
+```
+
+## Performance et optimisation
+
+### Allocation mémoire
+
+#### Pré-allocation des slices
+```go
+// ✅ Bon - pré-alloquer quand la taille est connue
+func processItems(items []Item) []Result {
+    results := make([]Result, 0, len(items))  // Capacité connue
+    
+    for _, item := range items {
+        results = append(results, process(item))
+    }
+    
+    return results
+}
+
+// ✅ Réutilisation de slices
+var resultPool = sync.Pool{
+    New: func() interface{} {
+        return make([]Result, 0, 100)
+    },
+}
+
+func processItemsWithPool(items []Item) []Result {
+    results := resultPool.Get().([]Result)
+    defer func() {
+        results = results[:0]  // Reset sans désallocation
+        resultPool.Put(results)
+    }()
+    
+    for _, item := range items {
+        results = append(results, process(item))
+    }
+    
+    return results
+}
+```
+
+#### String building efficace
+```go
+// ❌ Inefficace - nombreuses allocations
+func buildString(parts []string) string {
+    result := ""
+    for _, part := range parts {
+        result += part  // Allocation à chaque itération
+    }
+    return result
+}
+
+// ✅ Efficace - une seule allocation
+func buildStringOptimized(parts []string) string {
+    var builder strings.Builder
+    builder.Grow(estimateSize(parts))  // Pré-allouer si possible
+    
+    for _, part := range parts {
+        builder.WriteString(part)
+    }
+    
+    return builder.String()
+}
+
+// ✅ Encore mieux pour des cas simples
+func buildStringJoin(parts []string) string {
+    return strings.Join(parts, "")
+}
+```
+
+#### Maps avec taille connue
+```go
+// ✅ Pré-allouer les maps
+func createUserMap(users []User) map[int]User {
+    userMap := make(map[int]User, len(users))  // Capacité initiale
+    
+    for _, user := range users {
+        userMap[user.ID] = user
+    }
+    
+    return userMap
+}
+```
+
+### Patterns de performance
+
+#### Éviter les allocations inutiles
+```go
+// ❌ Allocation à chaque appel
+func processData(data []byte) string {
+    return string(data)  // Copie les données
+}
+
+// ✅ Réutiliser quand possible
+func processDataOptimized(data []byte) []byte {
+    return data  // Pas de copie
+}
+
+// ✅ Pools d'objets pour les types coûteux
+var bufferPool = sync.Pool{
+    New: func() interface{} {
+        return make([]byte, 0, 1024)
+    },
+}
+
+func processWithBuffer() {
+    buf := bufferPool.Get().([]byte)
+    defer bufferPool.Put(buf[:0])
+    
+    // Utiliser buf...
+}
+```
+
+## Concurrence et sécurité
+
+### Goroutines
+
+#### ✅ Bonnes pratiques
+```go
+// Toujours une façon d'arrêter les goroutines
+func worker(ctx context.Context, jobs <-chan Job) {
+    for {
+        select {
+        case job := <-jobs:
+            processJob(job)
+        case <-ctx.Done():
+            return  // Arrêt propre
+        }
+    }
+}
+
+// Utilisation de WaitGroup pour synchroniser
+func processAllJobs(jobs []Job) {
+    var wg sync.WaitGroup
+    jobChan := make(chan Job, len(jobs))
+    
+    // Lancer les workers
+    for i := 0; i < 3; i++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            for job := range jobChan {
+                processJob(job)
+            }
+        }()
+    }
+    
+    // Envoyer les jobs
+    for _, job := range jobs {
+        jobChan <- job
+    }
+    close(jobChan)
+    
+    wg.Wait()
+}
+```
+
+#### ❌ Anti-patterns
+```go
+// Goroutines sans contrôle
+go func() {
+    for {
+        doSomething()  // Pas de moyen d'arrêter !
+    }
+}()
+
+// Shared state sans protection
+var counter int
+go func() {
+    counter++  // Race condition !
+}()
+```
+
+### Synchronisation
+
+#### Mutex et RWMutex
+```go
+// ✅ Protection appropriée
+type SafeCounter struct {
+    mu    sync.RWMutex
+    value map[string]int
+}
+
+func (c *SafeCounter) Increment(key string) {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    c.value[key]++
+}
+
+func (c *SafeCounter) Get(key string) int {
+    c.mu.RLock()
+    defer c.mu.RUnlock()
+    return c.value[key]
+}
+
+// ✅ Granularité appropriée du locking
+type UserCache struct {
+    mu    sync.RWMutex
+    users map[int]*User
+}
+
+func (uc *UserCache) GetUser(id int) *User {
+    uc.mu.RLock()
+    user := uc.users[id]
+    uc.mu.RUnlock()  // Libérer rapidement
+    
+    return user
+}
+```
+
+### Channels
+
+#### Patterns efficaces
+```go
+// ✅ Canal avec timeout
+func callWithTimeout(fn func() error, timeout time.Duration) error {
+    errChan := make(chan error, 1)
+    
+    go func() {
+        errChan <- fn()
+    }()
+    
+    select {
+    case err := <-errChan:
+        return err
+    case <-time.After(timeout):
+        return errors.New("timeout")
+    }
+}
+
+// ✅ Fan-out/Fan-in pattern
+func fanOut(input <-chan Work, workerCount int) []<-chan Result {
+    outputs := make([]<-chan Result, workerCount)
+    
+    for i := 0; i < workerCount; i++ {
+        output := make(chan Result)
+        outputs[i] = output
+        
+        go func(out chan<- Result) {
+            defer close(out)
+            for work := range input {
+                out <- process(work)
+            }
+        }(output)
+    }
+    
+    return outputs
+}
+```
+
+## Tests et qualité
+
+### Tests unitaires
+
+#### Structure AAA (Arrange-Act-Assert)
+```go
+func TestUserService_CreateUser(t *testing.T) {
+    // Arrange
+    service := NewUserService(mockRepo)
+    user := User{
+        Name:  "Alice",
+        Email: "alice@example.com",
+    }
+    
+    // Act
+    createdUser, err := service.CreateUser(user)
+    
+    // Assert
+    assert.NoError(t, err)
+    assert.Equal(t, user.Name, createdUser.Name)
+    assert.NotZero(t, createdUser.ID)
+}
+```
+
+#### Tests de table
+```go
+func TestValidateEmail(t *testing.T) {
+    tests := []struct {
+        name      string
+        email     string
+        wantValid bool
+    }{
+        {
+            name:      "valid email",
+            email:     "user@example.com",
+            wantValid: true,
+        },
+        {
+            name:      "empty email",
+            email:     "",
+            wantValid: false,
+        },
+        {
+            name:      "invalid format",
+            email:     "invalid-email",
+            wantValid: false,
+        },
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got := ValidateEmail(tt.email)
+            if got != tt.wantValid {
+                t.Errorf("ValidateEmail(%q) = %v, want %v", 
+                    tt.email, got, tt.wantValid)
+            }
+        })
+    }
+}
+```
+
+#### Helpers et fixtures
+```go
+func TestUserOperations(t *testing.T) {
+    // Helper pour créer un utilisateur de test
+    createTestUser := func(t *testing.T, name string) *User {
+        t.Helper()
+        return &User{
+            ID:   rand.Intn(1000),
+            Name: name,
+        }
+    }
+    
+    t.Run("create user", func(t *testing.T) {
+        user := createTestUser(t, "Alice")
+        // Test...
+    })
+}
+```
+
+### Mocks et stubs
+
+#### Interface-driven design
+```go
+// ✅ Définir des interfaces pour faciliter les tests
+type UserRepository interface {
+    GetUser(id int) (*User, error)
+    SaveUser(user *User) error
+}
+
+type UserService struct {
+    repo UserRepository  // Interface, pas implementation
+}
+
+// Mock simple pour les tests
+type MockUserRepository struct {
+    users map[int]*User
+}
+
+func (m *MockUserRepository) GetUser(id int) (*User, error) {
+    if user, exists := m.users[id]; exists {
+        return user, nil
+    }
+    return nil, ErrUserNotFound
+}
+```
+
+## Configuration et environnement
+
+### Gestion de la configuration
+
+#### ✅ Pattern de configuration
+```go
+type Config struct {
+    Server   ServerConfig   `yaml:"server"`
+    Database DatabaseConfig `yaml:"database"`
+    Redis    RedisConfig    `yaml:"redis"`
+    Log      LogConfig      `yaml:"log"`
+}
+
+type ServerConfig struct {
+    Port         int           `yaml:"port" env:"SERVER_PORT" default:"8080"`
+    ReadTimeout  time.Duration `yaml:"read_timeout" env:"SERVER_READ_TIMEOUT" default:"30s"`
+    WriteTimeout time.Duration `yaml:"write_timeout" env:"SERVER_WRITE_TIMEOUT" default:"30s"`
+}
+
+func LoadConfig() (*Config, error) {
+    cfg := &Config{}
+    
+    // 1. Valeurs par défaut
+    if err := setDefaults(cfg); err != nil {
+        return nil, err
+    }
+    
+    // 2. Fichier de configuration
+    if err := loadFromFile(cfg, "config.yaml"); err != nil {
+        log.Printf("No config file found, using defaults and env vars")
+    }
+    
+    // 3. Variables d'environnement (priorité la plus haute)
+    if err := loadFromEnv(cfg); err != nil {
+        return nil, err
+    }
+    
+    // 4. Validation
+    if err := validateConfig(cfg); err != nil {
+        return nil, err
+    }
+    
+    return cfg, nil
+}
+```
+
+### Variables d'environnement
+
+#### ✅ Bonnes pratiques
+```go
+// Préfixes pour éviter les conflits
+const envPrefix = "MYAPP_"
+
+func getEnv(key, defaultValue string) string {
+    if value := os.Getenv(envPrefix + key); value != "" {
+        return value
+    }
+    return defaultValue
+}
+
+// Types sécurisés
+func getEnvAsInt(key string, defaultValue int) int {
+    if value := os.Getenv(envPrefix + key); value != "" {
+        if intValue, err := strconv.Atoi(value); err == nil {
+            return intValue
+        }
+    }
+    return defaultValue
+}
+
+func getEnvAsDuration(key string, defaultValue time.Duration) time.Duration {
+    if value := os.Getenv(envPrefix + key); value != "" {
+        if duration, err := time.ParseDuration(value); err == nil {
+            return duration
+        }
+    }
+    return defaultValue
+}
+```
+
+## Logging et monitoring
+
+### Logging structuré
+
+#### ✅ Avec logrus ou slog
+```go
+import (
+    "log/slog"
+    "os"
+)
+
+// Configuration du logger global
+func setupLogger() {
+    logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+        Level: slog.LevelInfo,
+    }))
+    slog.SetDefault(logger)
+}
+
+// Utilisation avec contexte
+func ProcessRequest(ctx context.Context, userID int) error {
+    logger := slog.With(
+        slog.Int("user_id", userID),
+        slog.String("operation", "process_request"),
+    )
+    
+    logger.Info("Starting request processing")
+    
+    if err := doSomething(); err != nil {
+        logger.Error("Processing failed", 
+            slog.String("error", err.Error()),
+            slog.String("step", "validation"),
+        )
+        return err
+    }
+    
+    logger.Info("Request processed successfully")
+    return nil
+}
+```
+
+### Métriques
+
+#### ✅ Métriques essentielles avec Prometheus
+```go
+import (
+    "github.com/prometheus/client_golang/prometheus"
+    "github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var (
+    requestDuration = promauto.NewHistogramVec(
+        prometheus.HistogramOpts{
+            Name: "http_request_duration_seconds",
+            Help: "Duration of HTTP requests",
+        },
+        []string{"method", "endpoint", "status"},
+    )
+    
+    requestCount = promauto.NewCounterVec(
+        prometheus.CounterOpts{
+            Name: "http_requests_total",
+            Help: "Total number of HTTP requests",
+        },
+        []string{"method", "endpoint", "status"},
+    )
+    
+    activeConnections = promauto.NewGauge(
+        prometheus.GaugeOpts{
+            Name: "active_connections",
+            Help: "Number of active connections",
+        },
+    )
+)
+
+// Middleware pour capturer les métriques
+func MetricsMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        start := time.Now()
+        
+        wrapped := &responseWriter{ResponseWriter: w, statusCode: 200}
+        next.ServeHTTP(wrapped, r)
+        
+        duration := time.Since(start)
+        status := strconv.Itoa(wrapped.statusCode)
+        
+        requestDuration.WithLabelValues(r.Method, r.URL.Path, status).Observe(duration.Seconds())
+        requestCount.WithLabelValues(r.Method, r.URL.Path, status).Inc()
+    })
+}
+```
+
+## Sécurité
+
+### Validation d'entrée
+
+#### ✅ Toujours valider les entrées
+```go
+import "github.com/go-playground/validator/v10"
+
+type CreateUserRequest struct {
+    Name     string `json:"name" validate:"required,min=2,max=50"`
+    Email    string `json:"email" validate:"required,email"`
+    Age      int    `json:"age" validate:"gte=0,lte=120"`
+    Password string `json:"password" validate:"required,min=8"`
+}
+
+func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
+    var req CreateUserRequest
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "Invalid JSON", http.StatusBadRequest)
+        return
+    }
+    
+    // Validation
+    validate := validator.New()
+    if err := validate.Struct(req); err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return
+    }
+    
+    // Sanitization
+    req.Name = strings.TrimSpace(req.Name)
+    req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+    
+    // Process...
+}
+```
+
+### Secrets et authentification
+
+#### ✅ Gestion des secrets
+```go
+// Ne jamais hardcoder les secrets
+const APIKey = "secret123"  // ❌ JAMAIS ça !
+
+// Utiliser les variables d'environnement
+func getAPIKey() string {
+    key := os.Getenv("API_KEY")
+    if key == "" {
+        log.Fatal("API_KEY environment variable is required")
+    }
+    return key
+}
+
+// Rotation des tokens JWT
+func generateJWT(userID int, secretKey []byte) (string, error) {
+    claims := jwt.MapClaims{
+        "user_id": userID,
+        "exp":     time.Now().Add(15 * time.Minute).Unix(),  // Courte durée
+        "iat":     time.Now().Unix(),
+    }
+    
+    token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+    return token.SignedString(secretKey)
+}
+```
+
+### Rate limiting
+
+#### ✅ Protection contre les abus
+```go
+import "golang.org/x/time/rate"
+
+type RateLimiter struct {
+    limiter *rate.Limiter
+}
+
+func NewRateLimiter(requestsPerSecond int) *RateLimiter {
+    return &RateLimiter{
+        limiter: rate.NewLimiter(rate.Limit(requestsPerSecond), requestsPerSecond),
+    }
+}
+
+func (rl *RateLimiter) Allow() bool {
+    return rl.limiter.Allow()
+}
+
+// Middleware de rate limiting
+func RateLimitMiddleware(rl *RateLimiter) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            if !rl.Allow() {
+                http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
+                return
+            }
+            next.ServeHTTP(w, r)
+        })
+    }
+}
+```
+
+## Documentation
+
+### Code autodocumenté
+
+#### ✅ Commentaires utiles
+```go
+// Package userservice provides functionality for managing user accounts.
+//
+// This package handles user creation, authentication, and profile management.
+// It integrates with external identity providers and maintains user sessions.
+//
+// Example usage:
+//
+//    service := userservice.New(db, emailService)
+//    user, err := service.CreateUser("alice@example.com", "password123")
+//    if err != nil {
+//        log.Fatal(err)
+//    }
+//
+package userservice
+
+// User represents a user account in the system.
+//
+// Users can have multiple roles and belong to organizations.
+// The password field is never serialized to JSON for security.
+type User struct {
+    ID       int       `json:"id"`
+    Email    string    `json:"email"`
+    Name     string    `json:"name"`
+    Password string    `json:"-"`           // Never in JSON
+    Roles    []string  `json:"roles"`
+    Created  time.Time `json:"created_at"`
+}
+
+// CreateUser creates a new user account with the given email and password.
+//
+// The password is automatically hashed using bcrypt before storage.
+// Returns ErrEmailExists if a user with this email already exists.
+//
+// Example:
+//    user, err := service.CreateUser("alice@example.com", "securepass123")
+//    if errors.Is(err, userservice.ErrEmailExists) {
+//        // Handle duplicate email
+//    }
+func (s *Service) CreateUser(email, password string) (*User, error) {
+    // Implementation...
+}
+```
+
+### README efficace
+
+#### ✅ Structure recommandée
+```markdown
+# Mon Projet Go
+
+Description courte et claire du projet.
+
+## Installation
+
+```bash
+go install github.com/username/monprojet@latest
+```
+
+## Usage rapide
+
+```go
+package main
+
+import "github.com/username/monprojet"
+
+func main() {
+    client := monprojet.NewClient("api-key")
+    result, err := client.DoSomething()
+    // ...
+}
+```
+
+## Configuration
+
+| Variable | Description | Défaut |
+|----------|-------------|--------|
+| `API_KEY` | Clé API | requis |
+| `PORT` | Port serveur | `8080` |
+
+## Development
+
+```bash
+# Cloner
+git clone https://github.com/username/monprojet
+
+# Tests
+go test ./...
+
+# Build
+go build
+```
+
+## Contributing
+
+Voir [CONTRIBUTING.md](CONTRIBUTING.md)
+
+## License
+
+MIT License - voir [LICENSE](LICENSE)
+```
+
+## Déploiement et production
+
+### Dockerfile optimisé
+
+#### ✅ Multi-stage build
+```dockerfile
+# Build stage
+FROM golang:1.21-alpine AS builder
+
+WORKDIR /app
+
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build binary
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
+
+# Final stage
+FROM alpine:latest
+
+# Install ca-certificates for HTTPS
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /root/
+
+# Copy binary from builder
+COPY --from=builder /app/main .
+
+# Create non-root user
+RUN adduser -D -s /bin/sh appuser
+USER appuser
+
+EXPOSE 8080
+
+CMD ["./main"]
+```
+
+### Health checks
+
+#### ✅ Endpoints de santé
+```go
+type HealthChecker struct {
+    db    *sql.DB
+    redis *redis.Client
+}
+
+type HealthStatus struct {
+    Status      string            `json:"status"`
+    Version     string            `json:"version"`
+    Timestamp   time.Time         `json:"timestamp"`
+    Checks      map[string]Check  `json:"checks"`
+}
+
+type Check struct {
+    Status  string        `json:"status"`
+    Message string        `json:"message,omitempty"`
+    Latency time.Duration `json:"latency"`
+}
+
+func (h *HealthChecker) HealthHandler(w http.ResponseWriter, r *http.Request) {
+    ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+    defer cancel()
+    
+    status := HealthStatus{
+        Status:    "ok",
+        Version:   version,
+        Timestamp: time.Now(),
+        Checks:    make(map[string]Check),
+    }
+    
+    // Check database
+    start := time.Now()
+    if err := h.db.PingContext(ctx); err != nil {
+        status.Status = "degraded"
+        status.Checks["database"] = Check{
+            Status:  "fail",
+            Message: err.Error(),
+            Latency: time.Since(start),
+        }
+    } else {
+        status.Checks["database"] = Check{
+            Status:  "pass",
+            Latency: time.Since(start),
+        }
+    }
+    
+    // Check Redis
+    start = time.Now()
+    if err := h.redis.Ping(ctx).Err(); err != nil {
+        status.Status = "degraded"
+        status.Checks["redis"] = Check{
+            Status:  "fail",
+            Message: err.Error(),
+            Latency: time.Since(start),
+        }
+    } else {
+        status.Checks["redis"] = Check{
+            Status:  "pass",
+            Latency: time.Since(start),
+        }
+    }
+    
+    httpStatus := http.StatusOK
+    if status.Status != "ok" {
+        httpStatus = http.StatusServiceUnavailable
+    }
+    
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(httpStatus)
+    json.NewEncoder(w).Encode(status)
+}
+```
+
+## Résumé des commandements Go
+
+### Les 10 commandements du code Go idiomatique
+
+1. **Gère toujours les erreurs** - `if err != nil` n'est pas optionnel
+2. **Utilise `gofmt`** - Formatage uniforme pour toute l'équipe
+3. **Préfère la composition à l'héritage** - Interfaces et embedding
+4. **Sois explicite plutôt que magique** - Clarté > cleverness
+5. **Écris des tests dès le début** - TDD ou au minimum tests unitaires
+6. **Documente ton code public** - Commentaires pour l'API publique
+7. **Utilise les interfaces à bon escient** - Petites et focalisées
+8. **Évite les optimisations prématurées** - Profiling avant optimisation
+9. **Structure ton code clairement** - Packages cohérents et bien nommés
+10. **Reste simple** - La simplicité est la sophistication ultime
+
+## Ressources pour approfondir
+
+### Documentation officielle
+- [Effective Go](https://golang.org/doc/effective_go.html)
+- [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
+- [Go Memory Model](https://golang.org/ref/mem)
+
+### Outils essentiels
+- `golangci-lint` - Linter complet
+- `govulncheck` - Scanner de vulnérabilités
+- `goimports` - Organisation des imports
+- `go mod tidy` - Nettoyage des dépendances
+
+### Communauté
+- [Go Blog](https://blog.golang.org/)
+- [Gophers Slack](https://gophers.slack.com/)
+- [r/golang](https://reddit.com/r/golang)
+- [GoTime Podcast](https://changelog.com/gotime)
+
+---
+
+**Félicitations !** 🎉 Vous avez maintenant une base solide pour développer en Go avec les meilleures pratiques de l'industrie. Le code Go idiomatique n'est plus un mystère pour vous !
+
+> **💡 Dernière astuce** : Ces pratiques s'apprennent par l'expérience. Commencez par les appliquer dans vos projets personnels, puis graduellement dans vos projets professionnels. La communauté Go valorise énormément la consistance et la simplicité !

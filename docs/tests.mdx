@@ -1,0 +1,1334 @@
+---
+title: Tests
+description: Tests unitaires, benchmarks, et testing en Go
+---
+
+# Tests en Go
+
+Go intègre un framework de test puissant et simple dans son outillage standard. Les tests sont des citoyens de première classe dans l'écosystème Go.
+
+## Tests unitaires de base
+
+### Structure et conventions
+```go
+// math_utils.go
+package mathutils
+
+import "math"
+
+func Add(a, b int) int {
+    return a + b
+}
+
+func Multiply(a, b int) int {
+    return a * b
+}
+
+func Divide(a, b float64) (float64, error) {
+    if b == 0 {
+        return 0, errors.New("division par zéro")
+    }
+    return a / b, nil
+}
+
+func IsPrime(n int) bool {
+    if n < 2 {
+        return false
+    }
+    
+    for i := 2; i <= int(math.Sqrt(float64(n))); i++ {
+        if n%i == 0 {
+            return false
+        }
+    }
+    return true
+}
+```
+
+```go
+// math_utils_test.go
+package mathutils
+
+import (
+    "errors"
+    "testing"
+)
+
+func TestAdd(t *testing.T) {
+    result := Add(2, 3)
+    expected := 5
+    
+    if result != expected {
+        t.Errorf("Add(2, 3) = %d; want %d", result, expected)
+    }
+}
+
+func TestMultiply(t *testing.T) {
+    tests := []struct {
+        name     string
+        a, b     int
+        expected int
+    }{
+        {"positive numbers", 3, 4, 12},
+        {"zero multiplication", 5, 0, 0},
+        {"negative numbers", -2, 3, -6},
+        {"negative by negative", -2, -3, 6},
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result := Multiply(tt.a, tt.b)
+            if result != tt.expected {
+                t.Errorf("Multiply(%d, %d) = %d; want %d", 
+                    tt.a, tt.b, result, tt.expected)
+            }
+        })
+    }
+}
+
+func TestDivide(t *testing.T) {
+    // Test de division normale
+    result, err := Divide(10, 2)
+    if err != nil {
+        t.Fatalf("Divide(10, 2) returned unexpected error: %v", err)
+    }
+    
+    expected := 5.0
+    if result != expected {
+        t.Errorf("Divide(10, 2) = %f; want %f", result, expected)
+    }
+    
+    // Test de division par zéro
+    _, err = Divide(10, 0)
+    if err == nil {
+        t.Error("Divide(10, 0) should return an error")
+    }
+    
+    expectedErrMsg := "division par zéro"
+    if err.Error() != expectedErrMsg {
+        t.Errorf("Divide(10, 0) error = %q; want %q", err.Error(), expectedErrMsg)
+    }
+}
+
+func TestIsPrime(t *testing.T) {
+    tests := map[int]bool{
+        1:  false,
+        2:  true,
+        3:  true,
+        4:  false,
+        5:  true,
+        6:  false,
+        17: true,
+        25: false,
+        29: true,
+        30: false,
+    }
+    
+    for n, expected := range tests {
+        t.Run(fmt.Sprintf("IsPrime(%d)", n), func(t *testing.T) {
+            result := IsPrime(n)
+            if result != expected {
+                t.Errorf("IsPrime(%d) = %t; want %t", n, result, expected)
+            }
+        })
+    }
+}
+```
+
+### Exécution des tests
+```bash
+# Exécuter tous les tests du package courant
+go test
+
+# Tests avec détails
+go test -v
+
+# Tests d'un package spécifique
+go test ./mathutils
+
+# Tests récursifs
+go test ./...
+
+# Tests avec coverage
+go test -cover
+
+# Coverage détaillée
+go test -coverprofile=coverage.out
+go tool cover -html=coverage.out
+```
+
+## Tests avec testify
+
+### Installation et utilisation
+```bash
+go mod init myproject
+go get github.com/stretchr/testify
+```
+
+```go
+// user_service_test.go
+package service
+
+import (
+    "testing"
+    
+    "github.com/stretchr/testify/assert"
+    "github.com/stretchr/testify/require"
+    "github.com/stretchr/testify/suite"
+)
+
+func TestUserValidation(t *testing.T) {
+    user := User{
+        Name:  "Alice",
+        Email: "alice@example.com",
+        Age:   25,
+    }
+    
+    // Assert vs Require
+    // Assert continue même si le test échoue
+    assert.Equal(t, "Alice", user.Name)
+    assert.Contains(t, user.Email, "@")
+    assert.True(t, user.Age > 0)
+    
+    // Require arrête le test si échec
+    require.NotEmpty(t, user.Name, "User name should not be empty")
+    require.NotEmpty(t, user.Email, "User email should not be empty")
+    
+    // Tests sur des slices et maps
+    tags := []string{"admin", "active"}
+    assert.Len(t, tags, 2)
+    assert.Contains(t, tags, "admin")
+    assert.ElementsMatch(t, tags, []string{"active", "admin"})
+    
+    // Tests d'erreurs
+    err := user.Validate()
+    assert.NoError(t, err)
+    
+    // User invalide
+    invalidUser := User{Name: "", Email: "invalid", Age: -1}
+    err = invalidUser.Validate()
+    assert.Error(t, err)
+    assert.Contains(t, err.Error(), "name")
+}
+
+func TestUserOperations(t *testing.T) {
+    service := NewUserService()
+    
+    // Test de création
+    user, err := service.CreateUser("Alice", "alice@example.com")
+    require.NoError(t, err)
+    require.NotNil(t, user)
+    assert.Equal(t, "Alice", user.Name)
+    assert.NotZero(t, user.ID)
+    
+    // Test de récupération
+    foundUser, err := service.GetUser(user.ID)
+    require.NoError(t, err)
+    assert.Equal(t, user.ID, foundUser.ID)
+    assert.Equal(t, user.Name, foundUser.Name)
+    
+    // Test d'utilisateur non trouvé
+    _, err = service.GetUser(999)
+    assert.Error(t, err)
+    assert.Contains(t, err.Error(), "not found")
+}
+```
+
+### Test suites avec testify
+```go
+// user_service_suite_test.go
+package service
+
+import (
+    "testing"
+    
+    "github.com/stretchr/testify/suite"
+)
+
+type UserServiceTestSuite struct {
+    suite.Suite
+    service *UserService
+    testUsers []User
+}
+
+// SetupSuite s'exécute une fois avant tous les tests
+func (suite *UserServiceTestSuite) SetupSuite() {
+    suite.service = NewUserService()
+    suite.T().Log("UserService test suite started")
+}
+
+// TearDownSuite s'exécute une fois après tous les tests
+func (suite *UserServiceTestSuite) TearDownSuite() {
+    suite.T().Log("UserService test suite finished")
+}
+
+// SetupTest s'exécute avant chaque test
+func (suite *UserServiceTestSuite) SetupTest() {
+    // Nettoyer la base de données ou réinitialiser l'état
+    suite.service.Clear()
+    
+    // Créer des données de test
+    user1, _ := suite.service.CreateUser("Alice", "alice@example.com")
+    user2, _ := suite.service.CreateUser("Bob", "bob@example.com")
+    suite.testUsers = []User{*user1, *user2}
+}
+
+// TearDownTest s'exécute après chaque test
+func (suite *UserServiceTestSuite) TearDownTest() {
+    // Nettoyage si nécessaire
+}
+
+func (suite *UserServiceTestSuite) TestCreateUser() {
+    user, err := suite.service.CreateUser("Charlie", "charlie@example.com")
+    
+    suite.NoError(err)
+    suite.NotNil(user)
+    suite.Equal("Charlie", user.Name)
+    suite.NotZero(user.ID)
+}
+
+func (suite *UserServiceTestSuite) TestGetUser() {
+    existingUser := suite.testUsers[0]
+    
+    user, err := suite.service.GetUser(existingUser.ID)
+    
+    suite.NoError(err)
+    suite.Equal(existingUser.ID, user.ID)
+    suite.Equal(existingUser.Name, user.Name)
+}
+
+func (suite *UserServiceTestSuite) TestGetUserNotFound() {
+    _, err := suite.service.GetUser(999)
+    
+    suite.Error(err)
+    suite.Contains(err.Error(), "not found")
+}
+
+func (suite *UserServiceTestSuite) TestListUsers() {
+    users, err := suite.service.ListUsers()
+    
+    suite.NoError(err)
+    suite.Len(users, 2)
+    
+    // Vérifier que nos utilisateurs de test sont présents
+    names := make([]string, len(users))
+    for i, user := range users {
+        names[i] = user.Name
+    }
+    suite.ElementsMatch(names, []string{"Alice", "Bob"})
+}
+
+func (suite *UserServiceTestSuite) TestDeleteUser() {
+    userToDelete := suite.testUsers[0]
+    
+    err := suite.service.DeleteUser(userToDelete.ID)
+    suite.NoError(err)
+    
+    // Vérifier que l'utilisateur n'existe plus
+    _, err = suite.service.GetUser(userToDelete.ID)
+    suite.Error(err)
+    
+    // Vérifier qu'il ne reste qu'un utilisateur
+    users, _ := suite.service.ListUsers()
+    suite.Len(users, 1)
+}
+
+// Exécuter la suite de tests
+func TestUserServiceTestSuite(t *testing.T) {
+    suite.Run(t, new(UserServiceTestSuite))
+}
+```
+
+## Mocks et stubs
+
+### Interface pour faciliter les tests
+```go
+// interfaces.go
+package service
+
+type UserRepository interface {
+    Save(user *User) error
+    FindByID(id int) (*User, error)
+    FindByEmail(email string) (*User, error)
+    Delete(id int) error
+    List() ([]*User, error)
+}
+
+type EmailService interface {
+    SendWelcomeEmail(user *User) error
+    SendNotification(userID int, message string) error
+}
+
+// user_service.go
+type UserService struct {
+    repo  UserRepository
+    email EmailService
+}
+
+func NewUserService(repo UserRepository, email EmailService) *UserService {
+    return &UserService{
+        repo:  repo,
+        email: email,
+    }
+}
+
+func (s *UserService) RegisterUser(name, email string) (*User, error) {
+    // Vérifier si l'email existe déjà
+    existing, _ := s.repo.FindByEmail(email)
+    if existing != nil {
+        return nil, errors.New("email already exists")
+    }
+    
+    user := &User{
+        Name:  name,
+        Email: email,
+        ID:    generateID(),
+    }
+    
+    if err := s.repo.Save(user); err != nil {
+        return nil, fmt.Errorf("failed to save user: %w", err)
+    }
+    
+    if err := s.email.SendWelcomeEmail(user); err != nil {
+        // Log l'erreur mais ne pas faire échouer l'inscription
+        log.Printf("Failed to send welcome email: %v", err)
+    }
+    
+    return user, nil
+}
+```
+
+### Tests avec mocks manuels
+```go
+// mocks_test.go
+package service
+
+import (
+    "errors"
+    "testing"
+    
+    "github.com/stretchr/testify/assert"
+)
+
+// Mock du repository
+type MockUserRepository struct {
+    users       map[int]*User
+    emailIndex  map[string]*User
+    saveError   error
+    findError   error
+}
+
+func NewMockUserRepository() *MockUserRepository {
+    return &MockUserRepository{
+        users:      make(map[int]*User),
+        emailIndex: make(map[string]*User),
+    }
+}
+
+func (m *MockUserRepository) Save(user *User) error {
+    if m.saveError != nil {
+        return m.saveError
+    }
+    
+    m.users[user.ID] = user
+    m.emailIndex[user.Email] = user
+    return nil
+}
+
+func (m *MockUserRepository) FindByID(id int) (*User, error) {
+    if m.findError != nil {
+        return nil, m.findError
+    }
+    
+    user, exists := m.users[id]
+    if !exists {
+        return nil, errors.New("user not found")
+    }
+    return user, nil
+}
+
+func (m *MockUserRepository) FindByEmail(email string) (*User, error) {
+    user, exists := m.emailIndex[email]
+    if !exists {
+        return nil, errors.New("user not found")
+    }
+    return user, nil
+}
+
+func (m *MockUserRepository) Delete(id int) error {
+    user, exists := m.users[id]
+    if !exists {
+        return errors.New("user not found")
+    }
+    
+    delete(m.users, id)
+    delete(m.emailIndex, user.Email)
+    return nil
+}
+
+func (m *MockUserRepository) List() ([]*User, error) {
+    users := make([]*User, 0, len(m.users))
+    for _, user := range m.users {
+        users = append(users, user)
+    }
+    return users, nil
+}
+
+// Méthodes pour configurer le comportement du mock
+func (m *MockUserRepository) SetSaveError(err error) {
+    m.saveError = err
+}
+
+func (m *MockUserRepository) SetFindError(err error) {
+    m.findError = err
+}
+
+// Mock du service email
+type MockEmailService struct {
+    sentEmails      []EmailRecord
+    welcomeError    error
+    notificationError error
+}
+
+type EmailRecord struct {
+    Type      string
+    Recipient string
+    Subject   string
+    Message   string
+}
+
+func NewMockEmailService() *MockEmailService {
+    return &MockEmailService{
+        sentEmails: make([]EmailRecord, 0),
+    }
+}
+
+func (m *MockEmailService) SendWelcomeEmail(user *User) error {
+    if m.welcomeError != nil {
+        return m.welcomeError
+    }
+    
+    m.sentEmails = append(m.sentEmails, EmailRecord{
+        Type:      "welcome",
+        Recipient: user.Email,
+        Subject:   "Welcome!",
+        Message:   fmt.Sprintf("Welcome %s!", user.Name),
+    })
+    
+    return nil
+}
+
+func (m *MockEmailService) SendNotification(userID int, message string) error {
+    if m.notificationError != nil {
+        return m.notificationError
+    }
+    
+    m.sentEmails = append(m.sentEmails, EmailRecord{
+        Type:      "notification",
+        Recipient: fmt.Sprintf("user_%d", userID),
+        Message:   message,
+    })
+    
+    return nil
+}
+
+func (m *MockEmailService) GetSentEmails() []EmailRecord {
+    return m.sentEmails
+}
+
+func (m *MockEmailService) SetWelcomeError(err error) {
+    m.welcomeError = err
+}
+
+// Tests utilisant les mocks
+func TestUserService_RegisterUser(t *testing.T) {
+    repo := NewMockUserRepository()
+    email := NewMockEmailService()
+    service := NewUserService(repo, email)
+    
+    t.Run("successful registration", func(t *testing.T) {
+        user, err := service.RegisterUser("Alice", "alice@example.com")
+        
+        assert.NoError(t, err)
+        assert.NotNil(t, user)
+        assert.Equal(t, "Alice", user.Name)
+        assert.Equal(t, "alice@example.com", user.Email)
+        
+        // Vérifier que l'email de bienvenue a été envoyé
+        emails := email.GetSentEmails()
+        assert.Len(t, emails, 1)
+        assert.Equal(t, "welcome", emails[0].Type)
+        assert.Equal(t, "alice@example.com", emails[0].Recipient)
+    })
+    
+    t.Run("email already exists", func(t *testing.T) {
+        // Première inscription
+        _, err := service.RegisterUser("Alice", "alice@example.com")
+        assert.NoError(t, err)
+        
+        // Tentative de seconde inscription avec le même email
+        _, err = service.RegisterUser("Alice2", "alice@example.com")
+        assert.Error(t, err)
+        assert.Contains(t, err.Error(), "email already exists")
+    })
+    
+    t.Run("repository save error", func(t *testing.T) {
+        repo.SetSaveError(errors.New("database error"))
+        
+        _, err := service.RegisterUser("Bob", "bob@example.com")
+        assert.Error(t, err)
+        assert.Contains(t, err.Error(), "failed to save user")
+    })
+    
+    t.Run("email service error does not fail registration", func(t *testing.T) {
+        // Reset errors
+        repo.SetSaveError(nil)
+        email.SetWelcomeError(errors.New("email service down"))
+        
+        user, err := service.RegisterUser("Charlie", "charlie@example.com")
+        
+        // L'inscription doit réussir même si l'email échoue
+        assert.NoError(t, err)
+        assert.NotNil(t, user)
+        
+        // Aucun email ne doit avoir été envoyé
+        emails := email.GetSentEmails()
+        emailCount := 0
+        for _, e := range emails {
+            if e.Recipient == "charlie@example.com" {
+                emailCount++
+            }
+        }
+        assert.Equal(t, 0, emailCount)
+    })
+}
+```
+
+### Tests avec testify/mock
+```bash
+go get github.com/stretchr/testify/mock
+```
+
+```go
+// mocks_generated_test.go
+package service
+
+import (
+    "github.com/stretchr/testify/mock"
+)
+
+// MockUserRepository utilisant testify/mock
+type MockUserRepositoryTestify struct {
+    mock.Mock
+}
+
+func (m *MockUserRepositoryTestify) Save(user *User) error {
+    args := m.Called(user)
+    return args.Error(0)
+}
+
+func (m *MockUserRepositoryTestify) FindByID(id int) (*User, error) {
+    args := m.Called(id)
+    return args.Get(0).(*User), args.Error(1)
+}
+
+func (m *MockUserRepositoryTestify) FindByEmail(email string) (*User, error) {
+    args := m.Called(email)
+    if args.Get(0) == nil {
+        return nil, args.Error(1)
+    }
+    return args.Get(0).(*User), args.Error(1)
+}
+
+func (m *MockUserRepositoryTestify) Delete(id int) error {
+    args := m.Called(id)
+    return args.Error(0)
+}
+
+func (m *MockUserRepositoryTestify) List() ([]*User, error) {
+    args := m.Called()
+    return args.Get(0).([]*User), args.Error(1)
+}
+
+// Tests avec expectations
+func TestUserService_RegisterUser_WithTestifyMock(t *testing.T) {
+    repo := new(MockUserRepositoryTestify)
+    email := NewMockEmailService()
+    service := NewUserService(repo, email)
+    
+    t.Run("successful registration with expectations", func(t *testing.T) {
+        user := &User{Name: "Alice", Email: "alice@example.com", ID: 1}
+        
+        // Configurer les expectations
+        repo.On("FindByEmail", "alice@example.com").Return(nil, errors.New("not found"))
+        repo.On("Save", mock.AnythingOfType("*service.User")).Return(nil)
+        
+        result, err := service.RegisterUser("Alice", "alice@example.com")
+        
+        assert.NoError(t, err)
+        assert.NotNil(t, result)
+        
+        // Vérifier que toutes les expectations ont été satisfaites
+        repo.AssertExpectations(t)
+        
+        // Vérifier les appels spécifiques
+        repo.AssertCalled(t, "FindByEmail", "alice@example.com")
+        repo.AssertCalled(t, "Save", mock.AnythingOfType("*service.User"))
+    })
+}
+```
+
+## Tests d'intégration
+
+### Base de données en mémoire
+```go
+// integration_test.go
+package service
+
+import (
+    "database/sql"
+    "testing"
+    
+    _ "github.com/mattn/go-sqlite3"
+    "github.com/stretchr/testify/assert"
+    "github.com/stretchr/testify/require"
+)
+
+func setupTestDB(t *testing.T) *sql.DB {
+    db, err := sql.Open("sqlite3", ":memory:")
+    require.NoError(t, err)
+    
+    // Créer les tables
+    schema := `
+    CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    `
+    
+    _, err = db.Exec(schema)
+    require.NoError(t, err)
+    
+    return db
+}
+
+func TestUserService_Integration(t *testing.T) {
+    if testing.Short() {
+        t.Skip("Skipping integration test in short mode")
+    }
+    
+    db := setupTestDB(t)
+    defer db.Close()
+    
+    repo := NewSQLUserRepository(db)
+    email := NewMockEmailService()
+    service := NewUserService(repo, email)
+    
+    t.Run("full user lifecycle", func(t *testing.T) {
+        // Créer un utilisateur
+        user, err := service.RegisterUser("Alice", "alice@example.com")
+        require.NoError(t, err)
+        require.NotNil(t, user)
+        assert.NotZero(t, user.ID)
+        
+        // Récupérer l'utilisateur
+        foundUser, err := service.GetUser(user.ID)
+        require.NoError(t, err)
+        assert.Equal(t, user.Name, foundUser.Name)
+        assert.Equal(t, user.Email, foundUser.Email)
+        
+        // Lister les utilisateurs
+        users, err := service.ListUsers()
+        require.NoError(t, err)
+        assert.Len(t, users, 1)
+        
+        // Supprimer l'utilisateur
+        err = service.DeleteUser(user.ID)
+        require.NoError(t, err)
+        
+        // Vérifier que l'utilisateur n'existe plus
+        _, err = service.GetUser(user.ID)
+        assert.Error(t, err)
+    })
+}
+```
+
+### Tests avec Docker
+```go
+// docker_integration_test.go
+// +build integration
+
+package service
+
+import (
+    "context"
+    "database/sql"
+    "fmt"
+    "testing"
+    "time"
+    
+    "github.com/testcontainers/testcontainers-go"
+    "github.com/testcontainers/testcontainers-go/wait"
+    _ "github.com/lib/pq"
+)
+
+func setupPostgresContainer(t *testing.T) (testcontainers.Container, *sql.DB) {
+    ctx := context.Background()
+    
+    req := testcontainers.ContainerRequest{
+        Image:        "postgres:13",
+        ExposedPorts: []string{"5432/tcp"},
+        Env: map[string]string{
+            "POSTGRES_PASSWORD": "password",
+            "POSTGRES_USER":     "testuser",
+            "POSTGRES_DB":       "testdb",
+        },
+        WaitingFor: wait.ForLog("database system is ready to accept connections").
+            WithOccurrence(2).
+            WithStartupTimeout(60 * time.Second),
+    }
+    
+    postgres, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+        ContainerRequest: req,
+        Started:          true,
+    })
+    require.NoError(t, err)
+    
+    host, err := postgres.Host(ctx)
+    require.NoError(t, err)
+    
+    port, err := postgres.MappedPort(ctx, "5432")
+    require.NoError(t, err)
+    
+    dsn := fmt.Sprintf("host=%s port=%s user=testuser password=password dbname=testdb sslmode=disable", 
+        host, port.Port())
+    
+    db, err := sql.Open("postgres", dsn)
+    require.NoError(t, err)
+    
+    // Attendre que la DB soit prête
+    err = db.Ping()
+    require.NoError(t, err)
+    
+    return postgres, db
+}
+
+func TestUserService_PostgresIntegration(t *testing.T) {
+    if testing.Short() {
+        t.Skip("Skipping integration test in short mode")
+    }
+    
+    container, db := setupPostgresContainer(t)
+    defer container.Terminate(context.Background())
+    defer db.Close()
+    
+    // Initialiser le schéma
+    schema := `
+    CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    `
+    _, err := db.Exec(schema)
+    require.NoError(t, err)
+    
+    repo := NewSQLUserRepository(db)
+    email := NewMockEmailService()
+    service := NewUserService(repo, email)
+    
+    t.Run("postgres integration test", func(t *testing.T) {
+        // Test avec vraie base de données PostgreSQL
+        user, err := service.RegisterUser("Alice", "alice@example.com")
+        require.NoError(t, err)
+        
+        foundUser, err := service.GetUser(user.ID)
+        require.NoError(t, err)
+        assert.Equal(t, user.Email, foundUser.Email)
+    })
+}
+```
+
+## Benchmarks
+
+### Benchmarks basiques
+```go
+// benchmark_test.go
+package mathutils
+
+import (
+    "testing"
+)
+
+func BenchmarkAdd(b *testing.B) {
+    for i := 0; i < b.N; i++ {
+        Add(i, i+1)
+    }
+}
+
+func BenchmarkMultiply(b *testing.B) {
+    for i := 0; i < b.N; i++ {
+        Multiply(i, i+1)
+    }
+}
+
+func BenchmarkIsPrime(b *testing.B) {
+    numbers := []int{17, 97, 1009, 10007}
+    
+    b.ResetTimer()  // Ne pas compter la préparation
+    
+    for i := 0; i < b.N; i++ {
+        for _, n := range numbers {
+            IsPrime(n)
+        }
+    }
+}
+
+// Benchmark avec sous-tests
+func BenchmarkIsPrimeSizes(b *testing.B) {
+    sizes := []struct {
+        name string
+        num  int
+    }{
+        {"small", 17},
+        {"medium", 1009},
+        {"large", 1000003},
+        {"huge", 982451653},
+    }
+    
+    for _, size := range sizes {
+        b.Run(size.name, func(b *testing.B) {
+            for i := 0; i < b.N; i++ {
+                IsPrime(size.num)
+            }
+        })
+    }
+}
+```
+
+### Benchmarks avec allocations
+```go
+// string_benchmark_test.go
+package performance
+
+import (
+    "fmt"
+    "strings"
+    "testing"
+)
+
+func concatWithPlus(strs []string) string {
+    result := ""
+    for _, s := range strs {
+        result += s
+    }
+    return result
+}
+
+func concatWithBuilder(strs []string) string {
+    var builder strings.Builder
+    for _, s := range strs {
+        builder.WriteString(s)
+    }
+    return builder.String()
+}
+
+func concatWithJoin(strs []string) string {
+    return strings.Join(strs, "")
+}
+
+func BenchmarkStringConcat(b *testing.B) {
+    strings := make([]string, 100)
+    for i := range strings {
+        strings[i] = fmt.Sprintf("string%d", i)
+    }
+    
+    b.Run("Plus", func(b *testing.B) {
+        b.ReportAllocs()  // Afficher les statistiques d'allocation
+        for i := 0; i < b.N; i++ {
+            concatWithPlus(strings)
+        }
+    })
+    
+    b.Run("Builder", func(b *testing.B) {
+        b.ReportAllocs()
+        for i := 0; i < b.N; i++ {
+            concatWithBuilder(strings)
+        }
+    })
+    
+    b.Run("Join", func(b *testing.B) {
+        b.ReportAllocs()
+        for i := 0; i < b.N; i++ {
+            concatWithJoin(strings)
+        }
+    })
+}
+
+// Benchmark avec bytes alloués
+func BenchmarkMapOperations(b *testing.B) {
+    b.Run("make_with_size", func(b *testing.B) {
+        b.ReportAllocs()
+        for i := 0; i < b.N; i++ {
+            m := make(map[int]int, 1000)  // Pré-allouer
+            for j := 0; j < 1000; j++ {
+                m[j] = j * 2
+            }
+        }
+    })
+    
+    b.Run("make_without_size", func(b *testing.B) {
+        b.ReportAllocs()
+        for i := 0; i < b.N; i++ {
+            m := make(map[int]int)  // Pas de pré-allocation
+            for j := 0; j < 1000; j++ {
+                m[j] = j * 2
+            }
+        }
+    })
+}
+```
+
+### Exécution des benchmarks
+```bash
+# Exécuter tous les benchmarks
+go test -bench=.
+
+# Benchmarks avec détails
+go test -bench=. -benchmem
+
+# Benchmark spécifique
+go test -bench=BenchmarkAdd
+
+# Benchmark avec profiling CPU
+go test -bench=. -cpuprofile=cpu.prof
+
+# Benchmark avec profiling mémoire
+go test -bench=. -memprofile=mem.prof
+
+# Comparer les performances
+go test -bench=. -count=5 > old.txt
+# Après modifications
+go test -bench=. -count=5 > new.txt
+# Installer benchcmp
+go install golang.org/x/tools/cmd/benchcmp@latest
+benchcmp old.txt new.txt
+```
+
+## Tests de propriétés (Property-based testing)
+
+### Avec gopter
+```bash
+go get github.com/leanovate/gopter
+```
+
+```go
+// property_test.go
+package mathutils
+
+import (
+    "testing"
+    
+    "github.com/leanovate/gopter"
+    "github.com/leanovate/gopter/gen"
+    "github.com/leanovate/gopter/prop"
+)
+
+func TestAddProperties(t *testing.T) {
+    properties := gopter.NewProperties(nil)
+    
+    // Propriété: l'addition est commutative
+    properties.Property("addition is commutative", prop.ForAll(
+        func(a, b int) bool {
+            return Add(a, b) == Add(b, a)
+        },
+        gen.Int(),
+        gen.Int(),
+    ))
+    
+    // Propriété: l'addition est associative
+    properties.Property("addition is associative", prop.ForAll(
+        func(a, b, c int) bool {
+            return Add(Add(a, b), c) == Add(a, Add(b, c))
+        },
+        gen.Int(),
+        gen.Int(),
+        gen.Int(),
+    ))
+    
+    // Propriété: l'élément neutre
+    properties.Property("zero is identity", prop.ForAll(
+        func(a int) bool {
+            return Add(a, 0) == a && Add(0, a) == a
+        },
+        gen.Int(),
+    ))
+    
+    properties.TestingRun(t)
+}
+
+func TestSortProperties(t *testing.T) {
+    properties := gopter.NewProperties(nil)
+    
+    // Propriété: trier un slice ne change pas sa longueur
+    properties.Property("sort preserves length", prop.ForAll(
+        func(slice []int) bool {
+            original := make([]int, len(slice))
+            copy(original, slice)
+            
+            sorted := Sort(slice)
+            
+            return len(sorted) == len(original)
+        },
+        gen.SliceOf(gen.Int()),
+    ))
+    
+    // Propriété: le résultat est trié
+    properties.Property("result is sorted", prop.ForAll(
+        func(slice []int) bool {
+            sorted := Sort(slice)
+            
+            for i := 1; i < len(sorted); i++ {
+                if sorted[i-1] > sorted[i] {
+                    return false
+                }
+            }
+            return true
+        },
+        gen.SliceOf(gen.Int()),
+    ))
+    
+    // Propriété: tous les éléments sont préservés
+    properties.Property("all elements preserved", prop.ForAll(
+        func(slice []int) bool {
+            original := make(map[int]int)
+            for _, v := range slice {
+                original[v]++
+            }
+            
+            sorted := Sort(slice)
+            result := make(map[int]int)
+            for _, v := range sorted {
+                result[v]++
+            }
+            
+            if len(original) != len(result) {
+                return false
+            }
+            
+            for k, v := range original {
+                if result[k] != v {
+                    return false
+                }
+            }
+            
+            return true
+        },
+        gen.SliceOf(gen.Int()),
+    ))
+    
+    properties.TestingRun(t)
+}
+```
+
+## Tests de mutation
+
+### Exemple basique
+```go
+// mutation_test.go
+package mathutils
+
+import (
+    "go/ast"
+    "go/parser"
+    "go/token"
+    "os/exec"
+    "strings"
+    "testing"
+)
+
+// Test de mutation simple pour vérifier la qualité des tests
+func TestMutationTesting(t *testing.T) {
+    if testing.Short() {
+        t.Skip("Skipping mutation testing in short mode")
+    }
+    
+    // Lire le code source
+    fset := token.NewFileSet()
+    file, err := parser.ParseFile(fset, "math_utils.go", nil, parser.ParseComments)
+    if err != nil {
+        t.Fatalf("Failed to parse source: %v", err)
+    }
+    
+    // Trouver les opérateurs à muter
+    mutations := findMutations(file)
+    
+    for _, mutation := range mutations {
+        t.Run(mutation.Description, func(t *testing.T) {
+            // Appliquer la mutation
+            mutatedCode := applyMutation(mutation)
+            
+            // Sauvegarder le code original
+            originalCode := readFile("math_utils.go")
+            defer writeFile("math_utils.go", originalCode)
+            
+            // Écrire le code muté
+            writeFile("math_utils.go", mutatedCode)
+            
+            // Exécuter les tests
+            cmd := exec.Command("go", "test", "-run", "TestAdd|TestMultiply")
+            output, err := cmd.CombinedOutput()
+            
+            if err == nil {
+                t.Errorf("Mutation survived: %s\nOutput: %s", 
+                    mutation.Description, string(output))
+            }
+        })
+    }
+}
+
+type Mutation struct {
+    Description string
+    Original    string
+    Mutated     string
+    Line        int
+}
+
+func findMutations(file *ast.File) []Mutation {
+    var mutations []Mutation
+    
+    ast.Inspect(file, func(n ast.Node) bool {
+        switch node := n.(type) {
+        case *ast.BinaryExpr:
+            switch node.Op {
+            case token.ADD:
+                mutations = append(mutations, Mutation{
+                    Description: "Change + to -",
+                    Original:    "+",
+                    Mutated:     "-",
+                })
+            case token.MUL:
+                mutations = append(mutations, Mutation{
+                    Description: "Change * to /",
+                    Original:    "*",
+                    Mutated:     "/",
+                })
+            }
+        }
+        return true
+    })
+    
+    return mutations
+}
+
+func applyMutation(mutation Mutation) string {
+    // Implémentation simplifiée - dans un vrai cas, 
+    // vous utiliseriez l'AST pour faire les changements
+    code := readFile("math_utils.go")
+    return strings.Replace(code, mutation.Original, mutation.Mutated, 1)
+}
+```
+
+## Bonnes pratiques
+
+### 1. Structure des tests
+```go
+// ✅ Bon - tests clairs et organisés
+func TestUserService_CreateUser(t *testing.T) {
+    // Arrange
+    service := NewUserService()
+    name := "Alice"
+    email := "alice@example.com"
+    
+    // Act
+    user, err := service.CreateUser(name, email)
+    
+    // Assert
+    assert.NoError(t, err)
+    assert.Equal(t, name, user.Name)
+    assert.Equal(t, email, user.Email)
+    assert.NotZero(t, user.ID)
+}
+```
+
+### 2. Tests de table
+```go
+// ✅ Bon - utiliser des tests de table pour plusieurs cas
+func TestValidateEmail(t *testing.T) {
+    tests := []struct {
+        name    string
+        email   string
+        wantErr bool
+    }{
+        {"valid email", "test@example.com", false},
+        {"empty email", "", true},
+        {"no @ symbol", "testexample.com", true},
+        {"no domain", "test@", true},
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            err := ValidateEmail(tt.email)
+            if (err != nil) != tt.wantErr {
+                t.Errorf("ValidateEmail() error = %v, wantErr %v", err, tt.wantErr)
+            }
+        })
+    }
+}
+```
+
+### 3. Helpers de test
+```go
+// ✅ Créer des helpers pour éviter la duplication
+func createTestUser(t *testing.T, name, email string) *User {
+    t.Helper()  // Marque cette fonction comme helper
+    
+    user := &User{
+        Name:  name,
+        Email: email,
+        ID:    rand.Intn(1000),
+    }
+    
+    if err := user.Validate(); err != nil {
+        t.Fatalf("createTestUser created invalid user: %v", err)
+    }
+    
+    return user
+}
+```
+
+### 4. Isolation des tests
+```go
+// ✅ Bon - chaque test est indépendant
+func TestUserService(t *testing.T) {
+    t.Run("create user", func(t *testing.T) {
+        service := NewUserService()  // Nouvelle instance
+        // test...
+    })
+    
+    t.Run("delete user", func(t *testing.T) {
+        service := NewUserService()  // Nouvelle instance
+        // test...
+    })
+}
+```
+
+## Prochaine étape
+
+Parfait ! Vous maîtrisez maintenant :
+- ✅ Tests unitaires avec le framework intégré
+- ✅ Tests avancés avec testify
+- ✅ Mocks et stubs pour l'isolation
+- ✅ Tests d'intégration avec bases de données
+- ✅ Benchmarks et profiling de performance
+- ✅ Property-based testing et mutation testing
+- ✅ Bonnes pratiques de testing
+
+👉 **[Mettons en pratique avec des projets réels](/projets)**
+
+---
+
+> **💡 Astuce** : En Go, les tests ne sont pas optionnels - ils font partie intégrante du développement. Un bon coverage et des tests rapides vous permettront de refactorer en confiance !

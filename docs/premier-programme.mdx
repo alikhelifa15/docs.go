@@ -1,0 +1,398 @@
+---
+title: Premier programme Go
+description: Créez et exécutez votre premier programme en Go
+---
+
+# Votre premier programme Go
+
+## Hello World classique
+
+Commençons par le traditionnel "Hello World" en Go.
+
+### Étape 1 : Créer le fichier
+
+Créez un nouveau fichier appelé `main.go` :
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("Hello, World!")
+}
+```
+
+### Étape 2 : Exécuter le programme
+
+Ouvrez votre terminal dans le même répertoire et exécutez :
+
+```bash
+go run main.go
+```
+
+**Résultat :**
+```
+Hello, World!
+```
+
+🎉 **Félicitations !** Vous venez d'exécuter votre premier programme Go !
+
+## Décortiquons le code
+
+### Package main
+```go
+package main  // Déclare le package principal
+```
+
+- **Chaque fichier Go** commence par une déclaration de package
+- Le **package `main`** est spécial : c'est le point d'entrée du programme
+- Un **exécutable** doit avoir un package `main`
+
+### Import
+```go
+import "fmt"  // Importe le package fmt pour l'affichage
+```
+
+- `fmt` est un **package standard** pour le formatage et l'affichage
+- Il contient des fonctions comme `Println`, `Printf`, `Sprintf`
+
+### Fonction main
+```go
+func main() {
+    // Point d'entrée du programme
+    fmt.Println("Hello, World!")
+}
+```
+
+- La **fonction `main()`** est le point d'entrée de votre programme
+- Elle ne prend **aucun paramètre** et ne retourne rien
+- L'exécution commence toujours par `main()`
+
+## Commandes Go essentielles
+
+### `go run` - Exécution directe
+```bash
+# Compile et exécute immédiatement
+go run main.go
+
+# Avec plusieurs fichiers
+go run *.go
+
+# Avec un répertoire
+go run .
+```
+
+### `go build` - Compilation
+```bash
+# Compile en exécutable
+go build main.go
+./main          # Linux/macOS
+main.exe        # Windows
+
+# Nommer l'exécutable
+go build -o monprogramme main.go
+./monprogramme
+```
+
+### `go fmt` - Formatage automatique
+```bash
+# Formate votre code selon les standards Go
+go fmt main.go
+
+# Formate tous les fichiers Go du répertoire
+go fmt .
+```
+
+## Amélioration : Programme interactif
+
+Créons un programme plus intéressant qui demande votre nom :
+
+```go
+package main
+
+import (
+    "fmt"
+    "bufio"
+    "os"
+    "strings"
+)
+
+func main() {
+    // Affichage du message de bienvenue
+    fmt.Println("=== Bienvenue dans Go ! ===")
+    fmt.Print("Entrez votre nom: ")
+    
+    // Lecture de l'entrée utilisateur
+    reader := bufio.NewReader(os.Stdin)
+    nom, err := reader.ReadString('\n')
+    
+    // Gestion d'erreur basique
+    if err != nil {
+        fmt.Println("Erreur lors de la lecture :", err)
+        return
+    }
+    
+    // Nettoyage de l'entrée (supprime le \n)
+    nom = strings.TrimSpace(nom)
+    
+    // Message personnalisé
+    fmt.Printf("Bonjour, %s ! Bienvenue dans le monde de Go ! 🚀\n", nom)
+}
+```
+
+**Exécution :**
+```bash
+go run main.go
+```
+
+**Interaction :**
+```
+=== Bienvenue dans Go ! ===
+Entrez votre nom: Alice
+Bonjour, Alice ! Bienvenue dans le monde de Go ! 🚀
+```
+
+### Nouveaux concepts introduits
+
+#### Imports multiples
+```go
+import (
+    "fmt"      // Formatage et affichage
+    "bufio"    // Lecture buffered
+    "os"       // Système d'exploitation
+    "strings"  // Manipulation de chaînes
+)
+```
+
+#### Gestion d'erreurs
+```go
+nom, err := reader.ReadString('\n')
+if err != nil {
+    // Gérer l'erreur
+    return
+}
+```
+
+#### Formatage avec Printf
+```go
+fmt.Printf("Bonjour, %s !\n", nom)
+// %s = placeholder pour string
+// \n = nouvelle ligne
+```
+
+## Compilation avancée
+
+### Build pour différentes plateformes
+```bash
+# Pour Windows depuis Linux/macOS
+GOOS=windows GOARCH=amd64 go build -o app.exe main.go
+
+# Pour Linux depuis Windows/macOS  
+GOOS=linux GOARCH=amd64 go build -o app main.go
+
+# Pour macOS depuis Windows/Linux
+GOOS=darwin GOARCH=amd64 go build -o app main.go
+
+# ARM64 (Apple Silicon, Raspberry Pi)
+GOOS=darwin GOARCH=arm64 go build -o app main.go
+```
+
+### Optimisations de build
+```bash
+# Build optimisé (plus petit, plus rapide)
+go build -ldflags="-s -w" main.go
+
+# Désactiver l'inlining (debugging)
+go build -gcflags="-N -l" main.go
+```
+
+## Projets d'exercices
+
+### Exercice 1 : Calculatrice simple
+```go
+package main
+
+import "fmt"
+
+func main() {
+    var a, b float64
+    var operation string
+    
+    fmt.Print("Entrez le premier nombre: ")
+    fmt.Scan(&a)
+    
+    fmt.Print("Entrez l'opération (+, -, *, /): ")
+    fmt.Scan(&operation)
+    
+    fmt.Print("Entrez le second nombre: ")
+    fmt.Scan(&b)
+    
+    switch operation {
+    case "+":
+        fmt.Printf("%.2f + %.2f = %.2f\n", a, b, a+b)
+    case "-":
+        fmt.Printf("%.2f - %.2f = %.2f\n", a, b, a-b)
+    case "*":
+        fmt.Printf("%.2f * %.2f = %.2f\n", a, b, a*b)
+    case "/":
+        if b != 0 {
+            fmt.Printf("%.2f / %.2f = %.2f\n", a, b, a/b)
+        } else {
+            fmt.Println("Erreur: Division par zéro !")
+        }
+    default:
+        fmt.Println("Opération non reconnue !")
+    }
+}
+```
+
+### Exercice 2 : Générateur de salutations
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+func main() {
+    heure := time.Now().Hour()
+    
+    var salutation string
+    switch {
+    case heure < 12:
+        salutation = "Bonjour"
+    case heure < 18:
+        salutation = "Bon après-midi"
+    default:
+        salutation = "Bonsoir"
+    }
+    
+    fmt.Printf("%s ! Il est %d heures.\n", salutation, heure)
+    fmt.Println("Que souhaitez-vous apprendre sur Go aujourd'hui ?")
+}
+```
+
+### Exercice 3 : Information système
+```go
+package main
+
+import (
+    "fmt"
+    "runtime"
+    "time"
+)
+
+func main() {
+    fmt.Println("=== Informations système ===")
+    fmt.Printf("Système d'exploitation: %s\n", runtime.GOOS)
+    fmt.Printf("Architecture: %s\n", runtime.GOARCH)
+    fmt.Printf("Version de Go: %s\n", runtime.Version())
+    fmt.Printf("Nombre de CPUs: %d\n", runtime.NumCPU())
+    fmt.Printf("Date et heure: %s\n", time.Now().Format("2006-01-02 15:04:05"))
+    
+    fmt.Println("\n=== Test de performance ===")
+    start := time.Now()
+    
+    // Petite opération pour mesurer le temps
+    sum := 0
+    for i := 0; i < 1000000; i++ {
+        sum += i
+    }
+    
+    duration := time.Since(start)
+    fmt.Printf("Calcul de la somme (1-1000000): %d\n", sum)
+    fmt.Printf("Temps d'exécution: %v\n", duration)
+}
+```
+
+## Bonnes pratiques
+
+### Structure de fichier
+```go
+// Commentaire du package (optionnel mais recommandé)
+package main
+
+// Imports groupés
+import (
+    "fmt"
+    "time"
+)
+
+// Constantes (si nécessaire)
+const MESSAGE = "Hello, Go!"
+
+// Variables globales (à éviter généralement)
+var startTime = time.Now()
+
+// Fonction main
+func main() {
+    // Code principal
+    fmt.Println(MESSAGE)
+}
+```
+
+### Nommage
+- **Packages** : minuscules, un mot (`fmt`, `time`, `strings`)
+- **Variables** : camelCase (`userName`, `maxRetries`)
+- **Constantes** : UPPER_CASE ou camelCase (`MAX_SIZE`, `defaultTimeout`)
+- **Fonctions** : CamelCase (`ProcessData`, `GetUserName`)
+
+## Débogage
+
+### Messages de debug
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+)
+
+func main() {
+    nom := "Alice"
+    age := 25
+    
+    // Debug simple
+    fmt.Printf("DEBUG: nom=%s, age=%d\n", nom, age)
+    
+    // Avec log (ajoute timestamp)
+    log.Printf("INFO: Programme démarré pour %s", nom)
+    
+    // Log d'erreur
+    if age < 0 {
+        log.Fatal("ERREUR: Age invalide")
+    }
+}
+```
+
+### Utilisation de Delve (debugger Go)
+```bash
+# Installation
+go install github.com/go-delve/delve/cmd/dlv@latest
+
+# Debug d'un programme
+dlv debug main.go
+
+# Dans le debugger :
+# break main.main    # Point d'arrêt
+# continue           # Continuer
+# print nom          # Afficher variable
+# next               # Ligne suivante
+# quit               # Quitter
+```
+
+## Prochaine étape
+
+Excellente progression ! Vous savez maintenant :
+- ✅ Créer et exécuter un programme Go
+- ✅ Comprendre la structure de base
+- ✅ Utiliser les commandes essentielles
+- ✅ Gérer les entrées utilisateur
+
+👉 **[Découvrons les variables et types de données](/variables-types)**
+
+---
+
+> **💡 Astuce** : Utilisez `go help run` ou `go help build` pour voir toutes les options disponibles pour chaque commande !

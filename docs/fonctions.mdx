@@ -1,0 +1,895 @@
+---
+title: Fonctions
+description: Créer et utiliser des fonctions en Go - paramètres, retours, closures
+---
+
+# Fonctions en Go
+
+Les fonctions sont les éléments de base pour organiser et réutiliser votre code en Go. Go offre des fonctionnalités puissantes et flexibles pour travailler avec les fonctions.
+
+## Déclaration et syntaxe de base
+
+### Fonction simple
+```go
+func direBonjour() {
+    fmt.Println("Bonjour !")
+}
+
+func main() {
+    direBonjour()  // Appel de la fonction
+}
+```
+
+### Fonction avec paramètres
+```go
+func saluer(nom string) {
+    fmt.Printf("Bonjour %s !\n", nom)
+}
+
+func additionner(a int, b int) {
+    resultat := a + b
+    fmt.Printf("%d + %d = %d\n", a, b, resultat)
+}
+
+// Paramètres du même type (syntaxe courte)
+func multiplier(a, b int) {
+    fmt.Printf("%d × %d = %d\n", a, b, a*b)
+}
+```
+
+### Fonction avec valeur de retour
+```go
+func additionner(a, b int) int {
+    return a + b
+}
+
+func obtenirMessage() string {
+    return "Hello, Go!"
+}
+
+func main() {
+    somme := additionner(5, 3)        // 8
+    message := obtenirMessage()       // "Hello, Go!"
+    
+    // Utilisation directe
+    fmt.Println(additionner(10, 20))  // 30
+}
+```
+
+### Retours multiples (caractéristique puissante de Go)
+```go
+func diviser(a, b float64) (float64, error) {
+    if b == 0 {
+        return 0, fmt.Errorf("division par zéro")
+    }
+    return a / b, nil
+}
+
+func obtenirNomAge() (string, int) {
+    return "Alice", 25
+}
+
+func main() {
+    // Récupération des deux valeurs
+    resultat, err := diviser(10, 3)
+    if err != nil {
+        fmt.Println("Erreur:", err)
+    } else {
+        fmt.Printf("Résultat: %.2f\n", resultat)
+    }
+    
+    // Ignorer une valeur avec _
+    nom, _ := obtenirNomAge()
+    fmt.Println("Nom:", nom)
+    
+    // Récupérer toutes les valeurs
+    nom, age := obtenirNomAge()
+    fmt.Printf("%s a %d ans\n", nom, age)
+}
+```
+
+### Retours nommés
+```go
+func calculerRectangle(longueur, largeur float64) (aire, perimetre float64) {
+    aire = longueur * largeur
+    perimetre = 2 * (longueur + largeur)
+    return  // Retour automatique des variables nommées
+}
+
+func analyserTexte(texte string) (mots, caracteres int, vide bool) {
+    caracteres = len(texte)
+    vide = caracteres == 0
+    
+    if !vide {
+        mots = len(strings.Fields(texte))
+    }
+    
+    return  // Équivalent à: return mots, caracteres, vide
+}
+```
+
+## Types de paramètres
+
+### Paramètres par valeur (défaut)
+```go
+func modifierEntier(x int) {
+    x = 100  // Modifie seulement la copie locale
+}
+
+func main() {
+    nombre := 42
+    modifierEntier(nombre)
+    fmt.Println(nombre)  // Toujours 42
+}
+```
+
+### Paramètres par pointeur (référence)
+```go
+func modifierEntierPtr(x *int) {
+    *x = 100  // Modifie la valeur originale
+}
+
+func main() {
+    nombre := 42
+    modifierEntierPtr(&nombre)
+    fmt.Println(nombre)  // Maintenant 100
+}
+```
+
+### Paramètres avec slices (référence de facto)
+```go
+func modifierSlice(s []int) {
+    if len(s) > 0 {
+        s[0] = 999  // Modifie le slice original
+    }
+}
+
+func ajouterElement(s []int, elem int) []int {
+    return append(s, elem)  // Peut créer un nouveau slice
+}
+
+func main() {
+    nombres := []int{1, 2, 3, 4, 5}
+    
+    modifierSlice(nombres)
+    fmt.Println(nombres)  // [999, 2, 3, 4, 5]
+    
+    // Pour append, il faut réassigner
+    nombres = ajouterElement(nombres, 6)
+    fmt.Println(nombres)  // [999, 2, 3, 4, 5, 6]
+}
+```
+
+### Paramètres avec structures
+```go
+type Personne struct {
+    Nom string
+    Age int
+}
+
+// Par valeur (copie)
+func vieillirCopie(p Personne) {
+    p.Age++  // Ne modifie que la copie
+}
+
+// Par pointeur (référence)
+func vieillir(p *Personne) {
+    p.Age++  // Modifie l'original
+}
+
+func main() {
+    alice := Personne{Nom: "Alice", Age: 25}
+    
+    vieillirCopie(alice)
+    fmt.Println(alice.Age)  // Toujours 25
+    
+    vieillir(&alice)
+    fmt.Println(alice.Age)  // Maintenant 26
+}
+```
+
+## Fonctions variadic (nombre variable d'arguments)
+
+### Syntaxe de base
+```go
+func somme(nombres ...int) int {
+    total := 0
+    for _, nombre := range nombres {
+        total += nombre
+    }
+    return total
+}
+
+func main() {
+    fmt.Println(somme())           // 0
+    fmt.Println(somme(1))          // 1
+    fmt.Println(somme(1, 2, 3))    // 6
+    fmt.Println(somme(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))  // 55
+}
+```
+
+### Avec d'autres paramètres
+```go
+func logger(niveau string, messages ...string) {
+    fmt.Printf("[%s] ", strings.ToUpper(niveau))
+    for i, msg := range messages {
+        if i > 0 {
+            fmt.Print(" | ")
+        }
+        fmt.Print(msg)
+    }
+    fmt.Println()
+}
+
+func main() {
+    logger("info", "Application démarrée")
+    logger("warn", "Mémoire faible", "CPU élevé")
+    logger("error", "Connexion échouée", "Retry", "Timeout")
+}
+```
+
+### Passer un slice à une fonction variadic
+```go
+func maximum(nombres ...int) int {
+    if len(nombres) == 0 {
+        return 0
+    }
+    
+    max := nombres[0]
+    for _, n := range nombres[1:] {
+        if n > max {
+            max = n
+        }
+    }
+    return max
+}
+
+func main() {
+    scores := []int{85, 92, 78, 96, 88}
+    
+    // Expansion du slice avec ...
+    max := maximum(scores...)
+    fmt.Printf("Score maximum: %d\n", max)
+}
+```
+
+## Fonctions comme valeurs
+
+### Assigner des fonctions à des variables
+```go
+func addition(a, b int) int {
+    return a + b
+}
+
+func soustraction(a, b int) int {
+    return a - b
+}
+
+func main() {
+    // Assigner une fonction à une variable
+    var operation func(int, int) int
+    
+    operation = addition
+    fmt.Println(operation(10, 5))  // 15
+    
+    operation = soustraction
+    fmt.Println(operation(10, 5))  // 5
+}
+```
+
+### Fonctions comme paramètres
+```go
+func appliquerOperation(a, b int, op func(int, int) int) int {
+    return op(a, b)
+}
+
+func multiplication(a, b int) int {
+    return a * b
+}
+
+func main() {
+    resultat := appliquerOperation(6, 7, multiplication)
+    fmt.Println(resultat)  // 42
+    
+    // Avec fonction anonyme
+    resultat = appliquerOperation(10, 3, func(x, y int) int {
+        return x % y  // Modulo
+    })
+    fmt.Println(resultat)  // 1
+}
+```
+
+### Retourner des fonctions
+```go
+func creerMultiplicateur(facteur int) func(int) int {
+    return func(x int) int {
+        return x * facteur
+    }
+}
+
+func main() {
+    doubler := creerMultiplicateur(2)
+    tripler := creerMultiplicateur(3)
+    
+    fmt.Println(doubler(5))   // 10
+    fmt.Println(tripler(5))   // 15
+}
+```
+
+## Fonctions anonymes et closures
+
+### Fonctions anonymes
+```go
+func main() {
+    // Fonction anonyme exécutée immédiatement
+    resultat := func(a, b int) int {
+        return a * a + b * b
+    }(3, 4)  // 9 + 16 = 25
+    
+    fmt.Println(resultat)
+    
+    // Fonction anonyme assignée à une variable
+    carre := func(x int) int {
+        return x * x
+    }
+    
+    fmt.Println(carre(5))  // 25
+}
+```
+
+### Closures (fermetures)
+```go
+func compteur() func() int {
+    compte := 0
+    return func() int {
+        compte++  // Accède à la variable du scope parent
+        return compte
+    }
+}
+
+func main() {
+    // Chaque compteur a son propre état
+    compteur1 := compteur()
+    compteur2 := compteur()
+    
+    fmt.Println(compteur1())  // 1
+    fmt.Println(compteur1())  // 2
+    fmt.Println(compteur2())  // 1
+    fmt.Println(compteur1())  // 3
+    fmt.Println(compteur2())  // 2
+}
+```
+
+### Closures avec boucles (piège courant)
+```go
+func main() {
+    // ❌ Problème : toutes les fonctions capturent la même variable
+    var fonctions []func() int
+    for i := 0; i < 5; i++ {
+        fonctions = append(fonctions, func() int {
+            return i  // i vaut 5 pour toutes les fonctions !
+        })
+    }
+    
+    for _, f := range fonctions {
+        fmt.Print(f(), " ")  // Affiche: 5 5 5 5 5
+    }
+    fmt.Println()
+    
+    // ✅ Solution : capturer la valeur dans le scope de la boucle
+    fonctions = nil
+    for i := 0; i < 5; i++ {
+        j := i  // Copie la valeur
+        fonctions = append(fonctions, func() int {
+            return j
+        })
+    }
+    
+    for _, f := range fonctions {
+        fmt.Print(f(), " ")  // Affiche: 0 1 2 3 4
+    }
+    fmt.Println()
+}
+```
+
+## Méthodes sur types
+
+### Méthodes sur structures
+```go
+type Rectangle struct {
+    Longueur, Largeur float64
+}
+
+// Méthode avec récepteur par valeur
+func (r Rectangle) Aire() float64 {
+    return r.Longueur * r.Largeur
+}
+
+// Méthode avec récepteur par pointeur
+func (r *Rectangle) Redimensionner(facteur float64) {
+    r.Longueur *= facteur
+    r.Largeur *= facteur
+}
+
+// Méthode avec récepteur par valeur (ne modifie pas l'original)
+func (r Rectangle) String() string {
+    return fmt.Sprintf("Rectangle(%.1f×%.1f)", r.Longueur, r.Largeur)
+}
+
+func main() {
+    rect := Rectangle{Longueur: 10, Largeur: 5}
+    
+    fmt.Printf("Aire: %.1f\n", rect.Aire())
+    fmt.Println("Avant:", rect)
+    
+    rect.Redimensionner(2)
+    fmt.Println("Après:", rect)
+    fmt.Printf("Nouvelle aire: %.1f\n", rect.Aire())
+}
+```
+
+### Méthodes sur types personnalisés
+```go
+type Temperature float64
+
+func (t Temperature) Celsius() float64 {
+    return float64(t)
+}
+
+func (t Temperature) Fahrenheit() float64 {
+    return float64(t)*9/5 + 32
+}
+
+func (t Temperature) Kelvin() float64 {
+    return float64(t) + 273.15
+}
+
+func (t *Temperature) AjouterDegres(degres float64) {
+    *t += Temperature(degres)
+}
+
+func main() {
+    temp := Temperature(25)  // 25°C
+    
+    fmt.Printf("%.1f°C = %.1f°F = %.1fK\n", 
+        temp.Celsius(), temp.Fahrenheit(), temp.Kelvin())
+    
+    temp.AjouterDegres(5)
+    fmt.Printf("Après +5°C: %.1f°C\n", temp.Celsius())
+}
+```
+
+### Méthodes sur slices
+```go
+type Entiers []int
+
+func (e Entiers) Somme() int {
+    total := 0
+    for _, v := range e {
+        total += v
+    }
+    return total
+}
+
+func (e Entiers) Moyenne() float64 {
+    if len(e) == 0 {
+        return 0
+    }
+    return float64(e.Somme()) / float64(len(e))
+}
+
+func (e *Entiers) Ajouter(valeurs ...int) {
+    *e = append(*e, valeurs...)
+}
+
+func main() {
+    nombres := Entiers{1, 2, 3, 4, 5}
+    
+    fmt.Printf("Somme: %d\n", nombres.Somme())
+    fmt.Printf("Moyenne: %.2f\n", nombres.Moyenne())
+    
+    nombres.Ajouter(6, 7, 8)
+    fmt.Printf("Après ajout: %v\n", nombres)
+    fmt.Printf("Nouvelle moyenne: %.2f\n", nombres.Moyenne())
+}
+```
+
+## Fonctions avancées
+
+### Récursion
+```go
+func factorielle(n int) int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorielle(n-1)
+}
+
+func fibonacci(n int) int {
+    if n <= 1 {
+        return n
+    }
+    return fibonacci(n-1) + fibonacci(n-2)
+}
+
+// Fibonacci optimisé avec mémoïsation
+func fibonacciMemo() func(int) int {
+    cache := make(map[int]int)
+    
+    var fib func(int) int
+    fib = func(n int) int {
+        if n <= 1 {
+            return n
+        }
+        
+        if val, exists := cache[n]; exists {
+            return val
+        }
+        
+        cache[n] = fib(n-1) + fib(n-2)
+        return cache[n]
+    }
+    
+    return fib
+}
+
+func main() {
+    fmt.Printf("5! = %d\n", factorielle(5))  // 120
+    
+    // Fibonacci normal (lent pour grands nombres)
+    fmt.Printf("Fibonacci(10) = %d\n", fibonacci(10))  // 55
+    
+    // Fibonacci optimisé
+    fibMemo := fibonacciMemo()
+    fmt.Printf("Fibonacci mémo(40) = %d\n", fibMemo(40))  // Rapide !
+}
+```
+
+### Fonctions d'ordre supérieur
+```go
+func mapper(slice []int, fn func(int) int) []int {
+    result := make([]int, len(slice))
+    for i, v := range slice {
+        result[i] = fn(v)
+    }
+    return result
+}
+
+func filtrer(slice []int, predicate func(int) bool) []int {
+    var result []int
+    for _, v := range slice {
+        if predicate(v) {
+            result = append(result, v)
+        }
+    }
+    return result
+}
+
+func reduire(slice []int, fn func(int, int) int, initial int) int {
+    result := initial
+    for _, v := range slice {
+        result = fn(result, v)
+    }
+    return result
+}
+
+func main() {
+    nombres := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+    
+    // Mapper: doubler chaque nombre
+    doubles := mapper(nombres, func(x int) int { return x * 2 })
+    fmt.Printf("Doubles: %v\n", doubles)
+    
+    // Filtrer: garder seulement les pairs
+    pairs := filtrer(nombres, func(x int) bool { return x%2 == 0 })
+    fmt.Printf("Pairs: %v\n", pairs)
+    
+    // Réduire: calculer la somme
+    somme := reduire(nombres, func(acc, x int) int { return acc + x }, 0)
+    fmt.Printf("Somme: %d\n", somme)
+    
+    // Chaîner les opérations
+    resultat := reduire(
+        filtrer(
+            mapper(nombres, func(x int) int { return x * x }),  // Carrés
+            func(x int) bool { return x > 25 }),               // > 25
+        func(acc, x int) int { return acc + x }, 0)            // Somme
+    fmt.Printf("Somme des carrés > 25: %d\n", resultat)
+}
+```
+
+## Exercices pratiques
+
+### Exercice 1 : Système de validation
+```go
+package main
+
+import (
+    "fmt"
+    "regexp"
+    "strings"
+)
+
+type ValidatorFunc func(string) error
+
+func creerValidateur(regles ...ValidatorFunc) ValidatorFunc {
+    return func(valeur string) error {
+        for _, regle := range regles {
+            if err := regle(valeur); err != nil {
+                return err
+            }
+        }
+        return nil
+    }
+}
+
+func longueurMin(min int) ValidatorFunc {
+    return func(s string) error {
+        if len(s) < min {
+            return fmt.Errorf("doit contenir au moins %d caractères", min)
+        }
+        return nil
+    }
+}
+
+func longueurMax(max int) ValidatorFunc {
+    return func(s string) error {
+        if len(s) > max {
+            return fmt.Errorf("ne doit pas dépasser %d caractères", max)
+        }
+        return nil
+    }
+}
+
+func contientMajuscule() ValidatorFunc {
+    return func(s string) error {
+        if strings.ToLower(s) == s {
+            return fmt.Errorf("doit contenir au moins une majuscule")
+        }
+        return nil
+    }
+}
+
+func formatEmail() ValidatorFunc {
+    emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+    return func(s string) error {
+        if !emailRegex.MatchString(s) {
+            return fmt.Errorf("format d'email invalide")
+        }
+        return nil
+    }
+}
+
+func main() {
+    // Validateur pour mot de passe
+    validatorPassword := creerValidateur(
+        longueurMin(8),
+        longueurMax(20),
+        contientMajuscule(),
+    )
+    
+    // Validateur pour email
+    validatorEmail := creerValidateur(
+        longueurMin(5),
+        longueurMax(50),
+        formatEmail(),
+    )
+    
+    // Tests
+    passwords := []string{"abc", "password", "Password123", "TropLongMotDePasseQuiDepasse"}
+    emails := []string{"test", "test@", "test@example.com", "invalid-email"}
+    
+    fmt.Println("=== Validation des mots de passe ===")
+    for _, pwd := range passwords {
+        if err := validatorPassword(pwd); err != nil {
+            fmt.Printf("❌ '%s': %v\n", pwd, err)
+        } else {
+            fmt.Printf("✅ '%s': valide\n", pwd)
+        }
+    }
+    
+    fmt.Println("\n=== Validation des emails ===")
+    for _, email := range emails {
+        if err := validatorEmail(email); err != nil {
+            fmt.Printf("❌ '%s': %v\n", email, err)
+        } else {
+            fmt.Printf("✅ '%s': valide\n", email)
+        }
+    }
+}
+```
+
+### Exercice 2 : Cache avec TTL
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+type CacheItem struct {
+    Value     interface{}
+    ExpiresAt time.Time
+}
+
+type Cache struct {
+    items map[string]CacheItem
+    ttl   time.Duration
+}
+
+func NouveauCache(ttl time.Duration) *Cache {
+    return &Cache{
+        items: make(map[string]CacheItem),
+        ttl:   ttl,
+    }
+}
+
+func (c *Cache) Set(cle string, valeur interface{}) {
+    c.items[cle] = CacheItem{
+        Value:     valeur,
+        ExpiresAt: time.Now().Add(c.ttl),
+    }
+}
+
+func (c *Cache) Get(cle string) (interface{}, bool) {
+    item, exists := c.items[cle]
+    if !exists {
+        return nil, false
+    }
+    
+    if time.Now().After(item.ExpiresAt) {
+        delete(c.items, cle)
+        return nil, false
+    }
+    
+    return item.Value, true
+}
+
+func (c *Cache) GetOuCalculer(cle string, calculer func() interface{}) interface{} {
+    if valeur, found := c.Get(cle); found {
+        return valeur
+    }
+    
+    valeur := calculer()
+    c.Set(cle, valeur)
+    return valeur
+}
+
+func (c *Cache) Nettoyer() int {
+    supprime := 0
+    for cle, item := range c.items {
+        if time.Now().After(item.ExpiresAt) {
+            delete(c.items, cle)
+            supprime++
+        }
+    }
+    return supprime
+}
+
+func (c *Cache) Taille() int {
+    return len(c.items)
+}
+
+// Exemple d'utilisation avec des calculs coûteux
+func calculFibonacci(n int) interface{} {
+    fmt.Printf("Calcul coûteux de fibonacci(%d)...\n", n)
+    time.Sleep(100 * time.Millisecond)  // Simule un calcul lent
+    
+    if n <= 1 {
+        return n
+    }
+    
+    a, b := 0, 1
+    for i := 2; i <= n; i++ {
+        a, b = b, a+b
+    }
+    return b
+}
+
+func main() {
+    cache := NouveauCache(2 * time.Second)
+    
+    // Première série de calculs
+    fmt.Println("=== Premiers calculs ===")
+    start := time.Now()
+    for i := 10; i <= 15; i++ {
+        cle := fmt.Sprintf("fib_%d", i)
+        resultat := cache.GetOuCalculer(cle, func() interface{} {
+            return calculFibonacci(i)
+        })
+        fmt.Printf("fibonacci(%d) = %v\n", i, resultat)
+    }
+    fmt.Printf("Temps total: %v\n", time.Since(start))
+    
+    // Deuxième série (cache hit)
+    fmt.Println("\n=== Deuxième série (cache) ===")
+    start = time.Now()
+    for i := 10; i <= 15; i++ {
+        cle := fmt.Sprintf("fib_%d", i)
+        resultat := cache.GetOuCalculer(cle, func() interface{} {
+            return calculFibonacci(i)
+        })
+        fmt.Printf("fibonacci(%d) = %v\n", i, resultat)
+    }
+    fmt.Printf("Temps total: %v (beaucoup plus rapide !)\n", time.Since(start))
+    
+    fmt.Printf("\nTaille du cache: %d éléments\n", cache.Taille())
+    
+    // Attendre l'expiration
+    fmt.Println("\nAttente de l'expiration du cache...")
+    time.Sleep(3 * time.Second)
+    
+    supprime := cache.Nettoyer()
+    fmt.Printf("Éléments expirés supprimés: %d\n", supprime)
+    fmt.Printf("Nouvelle taille du cache: %d\n", cache.Taille())
+}
+```
+
+## Bonnes pratiques
+
+### 1. Nommage des fonctions
+```go
+// ✅ Bon - verbes d'action
+func calculerTaxe(prix float64) float64 { ... }
+func validerEmail(email string) error { ... }
+func obtenirUtilisateur(id int) (*User, error) { ... }
+
+// ❌ Évitez les noms vagues
+func traiter(data interface{}) { ... }
+func faire() { ... }
+```
+
+### 2. Gestion des erreurs
+```go
+// ✅ Retournez toujours error en dernier
+func lireConfiguration(fichier string) (*Config, error) { ... }
+
+// ✅ Erreurs descriptives
+func validerAge(age int) error {
+    if age < 0 {
+        return fmt.Errorf("l'âge ne peut pas être négatif: %d", age)
+    }
+    return nil
+}
+```
+
+### 3. Fonctions courtes et focalisées
+```go
+// ✅ Une fonction = une responsabilité
+func calculerTaxe(prix float64) float64 {
+    return prix * 0.20
+}
+
+func calculerPrixTTC(prixHT float64) float64 {
+    taxe := calculerTaxe(prixHT)
+    return prixHT + taxe
+}
+```
+
+### 4. Utilisez des pointeurs pour les gros types
+```go
+type GrosseStructure struct {
+    // Beaucoup de champs...
+    Donnees [1000000]int
+}
+
+// ✅ Évite la copie
+func traiterGrosseStructure(gs *GrosseStructure) { ... }
+```
+
+## Prochaine étape
+
+Bravo ! Vous maîtrisez maintenant :
+- ✅ Déclaration et appel de fonctions
+- ✅ Paramètres et retours multiples
+- ✅ Fonctions variadic et comme valeurs
+- ✅ Closures et fonctions d'ordre supérieur
+- ✅ Méthodes sur types personnalisés
+- ✅ Récursion et patterns avancés
+
+👉 **[Découvrons l'organisation du code avec les packages](/packages)**
+
+---
+
+> **💡 Astuce** : En Go, préférez plusieurs petites fonctions plutôt qu'une grande fonction complexe. Cela améliore la lisibilité, la testabilité et la réutilisabilité !

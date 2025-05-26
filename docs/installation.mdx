@@ -1,0 +1,401 @@
+---
+title: Installation de Go
+description: Guide d'installation complet pour Windows, macOS et Linux
+---
+
+# Installation de Go
+
+Go est disponible pour tous les systèmes d'exploitation. Choisissez votre méthode d'installation préférée ci-dessous.
+
+## 🪟 Windows
+
+<Steps>
+  <Step title="Télécharger l'installateur" icon="download">
+    Rendez-vous sur [https://golang.org/dl/](https://golang.org/dl/) et téléchargez le fichier `.msi` pour Windows.
+    
+    Choisissez la version correspondant à votre architecture :
+    - `go1.21.x.windows-amd64.msi` (64-bit)
+    - `go1.21.x.windows-386.msi` (32-bit)
+  </Step>
+  
+  <Step title="Exécuter l'installateur" icon="gear">
+    Double-cliquez sur le fichier `.msi` téléchargé et suivez l'assistant d'installation.
+    
+    Go sera installé par défaut dans `C:\Program Files\Go`.
+    
+    Les variables d'environnement seront configurées automatiquement.
+  </Step>
+  
+  <Step title="Vérifier l'installation" icon="check">
+    Ouvrez l'invite de commande (cmd) et vérifiez que Go est correctement installé :
+    
+    ```bash
+    go version
+    ```
+    
+    Vous devriez voir quelque chose comme :
+    ```
+    go version go1.21.5 windows/amd64
+    ```
+  </Step>
+</Steps>
+
+### Alternative : Chocolatey
+
+<Steps>
+  <Step title="Installer Chocolatey">
+    Si vous utilisez Chocolatey, ouvrez PowerShell en tant qu'administrateur :
+    
+    ```powershell
+    choco install golang
+    ```
+  </Step>
+  
+  <Step title="Vérifier l'installation">
+    ```bash
+    go version
+    ```
+  </Step>
+</Steps>
+
+---
+
+## 🍎 macOS
+
+<Steps>
+  <Step title="Installer via Homebrew (Recommandé)" icon="package">
+    Homebrew est la méthode la plus simple pour installer Go sur macOS :
+    
+    ```bash
+    # Installer Homebrew si pas déjà fait
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    
+    # Installer Go
+    brew install go
+    ```
+  </Step>
+  
+  <Step title="Configurer l'environnement" icon="gear">
+    Ajoutez ces lignes à votre fichier de profil (`~/.zshrc` ou `~/.bash_profile`) :
+    
+    ```bash
+    export PATH=$PATH:/opt/homebrew/bin/go
+    export GOPATH=$HOME/go
+    export PATH=$PATH:$GOPATH/bin
+    ```
+    
+    Puis rechargez votre profil :
+    ```bash
+    source ~/.zshrc
+    ```
+  </Step>
+  
+  <Step title="Vérifier l'installation" icon="check">
+    ```bash
+    go version
+    ```
+    
+    Résultat attendu :
+    ```
+    go version go1.21.5 darwin/amd64
+    ```
+  </Step>
+</Steps>
+
+### Alternative : Installateur officiel
+
+<Steps>
+  <Step title="Télécharger le package">
+    Allez sur [https://golang.org/dl/](https://golang.org/dl/) et téléchargez le fichier `.pkg` pour macOS.
+  </Step>
+  
+  <Step title="Installer">
+    Double-cliquez sur le fichier `.pkg` et suivez l'assistant.
+    
+    Go sera installé dans `/usr/local/go`.
+  </Step>
+  
+  <Step title="Configurer PATH">
+    Ajoutez à votre profil shell :
+    ```bash
+    export PATH=$PATH:/usr/local/go/bin
+    ```
+  </Step>
+</Steps>
+
+---
+
+## 🐧 Linux
+
+### Ubuntu / Debian
+
+<Steps>
+  <Step title="Mettre à jour les packages" icon="refresh">
+    ```bash
+    sudo apt update
+    ```
+  </Step>
+  
+  <Step title="Installer Go" icon="download">
+    ```bash
+    sudo apt install golang-go
+    ```
+    
+    ⚠️ **Note** : Cette méthode peut installer une version plus ancienne de Go.
+  </Step>
+  
+  <Step title="Vérifier la version" icon="check">
+    ```bash
+    go version
+    ```
+    
+    Si la version est trop ancienne, utilisez la méthode manuelle ci-dessous.
+  </Step>
+</Steps>
+
+### CentOS / RHEL / Fedora
+
+<Steps>
+  <Step title="CentOS/RHEL">
+    ```bash
+    sudo yum install golang
+    # ou avec dnf
+    sudo dnf install golang
+    ```
+  </Step>
+  
+  <Step title="Fedora">
+    ```bash
+    sudo dnf install golang
+    ```
+  </Step>
+  
+  <Step title="Vérifier">
+    ```bash
+    go version
+    ```
+  </Step>
+</Steps>
+
+### Installation manuelle (Dernière version)
+
+<Steps>
+  <Step title="Télécharger Go" icon="download">
+    ```bash
+    # Télécharger la dernière version (remplacez par la version actuelle)
+    wget https://go.dev/dl/go1.21.5.linux-amd64.tar.gz
+    ```
+  </Step>
+  
+  <Step title="Supprimer l'ancienne installation" icon="trash">
+    ```bash
+    sudo rm -rf /usr/local/go
+    ```
+  </Step>
+  
+  <Step title="Extraire et installer" icon="gear">
+    ```bash
+    sudo tar -C /usr/local -xzf go1.21.5.linux-amd64.tar.gz
+    ```
+  </Step>
+  
+  <Step title="Configurer l'environnement" icon="gear">
+    Ajoutez à votre `~/.bashrc` ou `~/.zshrc` :
+    
+    ```bash
+    export PATH=$PATH:/usr/local/go/bin
+    export GOPATH=$HOME/go
+    export PATH=$PATH:$GOPATH/bin
+    ```
+    
+    Rechargez votre profil :
+    ```bash
+    source ~/.bashrc
+    ```
+  </Step>
+  
+  <Step title="Vérifier l'installation" icon="check">
+    ```bash
+    go version
+    ```
+    
+    Résultat attendu :
+    ```
+    go version go1.21.5 linux/amd64
+    ```
+  </Step>
+</Steps>
+
+---
+
+## ⚙️ Configuration de l'éditeur
+
+### VS Code (Recommandé)
+
+<Steps>
+  <Step title="Installer VS Code">
+    Téléchargez VS Code depuis [https://code.visualstudio.com/](https://code.visualstudio.com/)
+  </Step>
+  
+  <Step title="Installer l'extension Go" icon="puzzle">
+    1. Ouvrez VS Code
+    2. Allez dans Extensions (`Ctrl+Shift+X`)
+    3. Recherchez "Go" 
+    4. Installez l'extension officielle de Google
+  </Step>
+  
+  <Step title="Configurer l'extension" icon="gear">
+    Créez un fichier `.vscode/settings.json` dans votre workspace :
+    
+    ```json
+    {
+      "go.useLanguageServer": true,
+      "go.formatTool": "goimports",
+      "go.lintTool": "golangci-lint",
+      "editor.formatOnSave": true,
+      "editor.codeActionsOnSave": {
+        "source.organizeImports": true
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Installer les outils Go" icon="wrench">
+    Ouvrez la palette de commandes (`Ctrl+Shift+P`) et tapez :
+    ```
+    Go: Install/Update Tools
+    ```
+    
+    Sélectionnez tous les outils et installez-les.
+  </Step>
+</Steps>
+
+### Autres éditeurs
+
+<Steps>
+  <Step title="GoLand (JetBrains)">
+    IDE dédié à Go avec toutes les fonctionnalités intégrées.
+    
+    Téléchargez depuis [https://www.jetbrains.com/go/](https://www.jetbrains.com/go/)
+  </Step>
+  
+  <Step title="Vim/Neovim">
+    Installez le plugin vim-go :
+    ```vim
+    " Ajoutez à votre .vimrc
+    Plugin 'fatih/vim-go'
+    ```
+  </Step>
+</Steps>
+
+---
+
+## 🛠️ Outils essentiels
+
+<Steps>
+  <Step title="Installer les outils de développement" icon="wrench">
+    ```bash
+    # Formateur de code amélioré
+    go install golang.org/x/tools/cmd/goimports@latest
+    
+    # Linter complet
+    go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+    
+    # Serveur de documentation
+    go install golang.org/x/tools/cmd/godoc@latest
+    ```
+  </Step>
+  
+  <Step title="Vérifier les outils" icon="check">
+    ```bash
+    goimports -h
+    golangci-lint --version
+    godoc -h
+    ```
+  </Step>
+</Steps>
+
+---
+
+## ✅ Test final
+
+<Steps>
+  <Step title="Créer un programme de test" icon="code">
+    Créez un fichier `hello.go` :
+    
+    ```go
+    package main
+    
+    import "fmt"
+    
+    func main() {
+        fmt.Println("🎉 Go est correctement installé !")
+    }
+    ```
+  </Step>
+  
+  <Step title="Exécuter le programme" icon="play">
+    ```bash
+    go run hello.go
+    ```
+    
+    Résultat attendu :
+    ```
+    🎉 Go est correctement installé !
+    ```
+  </Step>
+  
+  <Step title="Compiler le programme" icon="gear">
+    ```bash
+    go build hello.go
+    ./hello        # Linux/macOS
+    hello.exe      # Windows
+    ```
+  </Step>
+</Steps>
+
+---
+
+## 🚨 Dépannage
+
+### Problèmes courants
+
+**"go: command not found"**
+- Vérifiez que Go est dans votre PATH
+- Rechargez votre terminal/profil shell
+
+**Permission denied (Linux/macOS)**
+```bash
+sudo chown -R $USER:$USER /usr/local/go
+```
+
+**Ancienne version installée**
+- Supprimez l'ancienne installation avant d'installer la nouvelle
+- Vérifiez qu'aucune autre version n'est dans votre PATH
+
+### Script de vérification complète
+
+```bash
+#!/bin/bash
+echo "=== Vérification de l'installation Go ==="
+echo "Version Go:"
+go version
+echo ""
+echo "Variables d'environnement:"
+go env GOROOT GOPATH GOOS GOARCH
+echo ""
+echo "Test de compilation:"
+echo 'package main; import "fmt"; func main() { fmt.Println("✅ Installation réussie !") }' | go run -
+```
+
+---
+
+## 🎯 Prochaine étape
+
+Félicitations ! Go est maintenant installé et configuré sur votre système.
+
+**👉 [Créons votre premier programme Go !](/premier-programme)**
+
+---
+
+> **💡 Conseil** : Bookmark cette page pour référence future. Les versions de Go sont mises à jour régulièrement !

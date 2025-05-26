@@ -1,0 +1,634 @@
+---
+title: Variables et types
+description: Apprenez les types de données et la déclaration de variables en Go
+---
+
+# Variables et types de données
+
+## Déclaration de variables
+
+Go offre plusieurs façons de déclarer des variables selon vos besoins.
+
+### Méthode explicite (verbale)
+```go
+var nom string = "Alice"
+var age int = 25
+var estEtudiant bool = true
+var salaire float64 = 45000.50
+```
+
+### Méthode courte (recommandée)
+```go
+nom := "Alice"              // string inféré
+age := 25                   // int inféré
+estEtudiant := true         // bool inféré
+salaire := 45000.50         // float64 inféré
+```
+
+### Déclaration sans initialisation
+```go
+var nom string              // "" (valeur zéro)
+var age int                 // 0 (valeur zéro)
+var estValide bool          // false (valeur zéro)
+
+// Assignation ultérieure
+nom = "Bob"
+age = 30
+estValide = true
+```
+
+### Déclaration multiple
+```go
+// Style bloc
+var (
+    nom         string = "Alice"
+    age         int    = 25
+    estEtudiant bool   = true
+)
+
+// Style inline
+var nom, age, ville = "Alice", 25, "Paris"
+
+// Style court multiple
+nom, age := "Alice", 25
+```
+
+## Types numériques
+
+### Entiers signés
+```go
+var a int8 = 127           // -128 à 127
+var b int16 = 32767        // -32768 à 32767  
+var c int32 = 2147483647   // -2^31 à 2^31-1
+var d int64 = 9223372036854775807  // -2^63 à 2^63-1
+var e int = 42             // Taille dépend de l'architecture (32 ou 64 bits)
+```
+
+### Entiers non signés
+```go
+var a uint8 = 255          // 0 à 255 (alias: byte)
+var b uint16 = 65535       // 0 à 65535
+var c uint32 = 4294967295  // 0 à 2^32-1
+var d uint64 = 18446744073709551615  // 0 à 2^64-1
+var e uint = 42            // Taille dépend de l'architecture
+```
+
+### Nombres à virgule flottante
+```go
+var prix float32 = 19.99   // Précision simple (32 bits)
+var pi float64 = 3.14159265359  // Précision double (64 bits, recommandé)
+
+// Notation scientifique
+var grand float64 = 1.23e4      // 12300
+var petit float64 = 1.23e-4     // 0.000123
+```
+
+### Types spéciaux
+```go
+var pointeur uintptr        // Entier de la taille d'un pointeur
+var r rune = 'A'           // Alias pour int32, représente un caractère Unicode
+var b byte = 65            // Alias pour uint8
+```
+
+## Chaînes de caractères (strings)
+
+### Déclaration et manipulation
+```go
+var message string = "Hello, Go!"
+var vide string           // "" (chaîne vide)
+
+// Chaînes multi-lignes (raw strings)
+var multiline string = `Ceci est
+une chaîne
+sur plusieurs lignes
+avec des "guillemets" préservés`
+
+// Concaténation
+prenom := "Alice"
+nom := "Dupont"
+nomComplet := prenom + " " + nom   // "Alice Dupont"
+
+// Échappement
+var citation = "Il a dit: \"Bonjour!\""
+var chemin = "C:\\Users\\Alice\\Documents"
+```
+
+### Opérations sur les chaînes
+```go
+import "strings"
+
+text := "Bonjour le monde"
+
+// Longueur
+longueur := len(text)              // 16
+
+// Manipulation
+majuscule := strings.ToUpper(text) // "BONJOUR LE MONDE"
+minuscule := strings.ToLower(text) // "bonjour le monde"
+contient := strings.Contains(text, "monde")  // true
+
+// Découpage
+mots := strings.Split(text, " ")   // ["Bonjour", "le", "monde"]
+```
+
+## Booléens
+
+```go
+var estVrai bool = true
+var estFaux bool = false
+var nonInitialise bool            // false (valeur zéro)
+
+// Opérations logiques
+a := true
+b := false
+
+et := a && b        // false (ET logique)
+ou := a || b        // true (OU logique)
+non := !a           // false (NON logique)
+
+// Comparaisons
+age := 25
+majeur := age >= 18              // true
+egal := age == 25                // true
+different := age != 30           // true
+```
+
+## Constantes
+
+### Constantes simples
+```go
+const PI = 3.14159
+const MESSAGE = "Bienvenue"
+const MAX_UTILISATEURS = 1000
+
+// Typage explicite
+const TAUX_TVA float64 = 0.20
+```
+
+### Constantes groupées avec iota
+```go
+const (
+    LUNDI = iota     // 0
+    MARDI            // 1
+    MERCREDI         // 2
+    JEUDI            // 3
+    VENDREDI         // 4
+    SAMEDI           // 5
+    DIMANCHE         // 6
+)
+
+// Iota avec calculs
+const (
+    _  = iota                    // 0 ignoré
+    KB = 1 << (10 * iota)        // 1024
+    MB                           // 1048576
+    GB                           // 1073741824
+)
+
+// Iota avec expressions
+const (
+    ROUGE = iota * 2             // 0
+    VERT                         // 2
+    BLEU                         // 4
+)
+```
+
+## Collections : Arrays (tableaux)
+
+### Déclaration et utilisation
+```go
+// Déclaration avec taille fixe
+var nombres [5]int = [5]int{1, 2, 3, 4, 5}
+
+// Syntaxe courte
+fruits := [3]string{"pomme", "banane", "orange"}
+
+// Taille automatique
+animaux := [...]string{"chat", "chien", "oiseau"}  // Taille: 3
+
+// Indices spécifiques
+notes := [5]int{0: 100, 2: 85, 4: 92}  // [100, 0, 85, 0, 92]
+```
+
+### Manipulation des arrays
+```go
+var scores [5]int
+
+// Assignation
+scores[0] = 95
+scores[1] = 87
+scores[2] = 92
+
+// Accès
+premierScore := scores[0]      // 95
+longueur := len(scores)        // 5
+
+// Itération
+for i, score := range scores {
+    fmt.Printf("Score %d: %d\n", i, score)
+}
+```
+
+## Collections : Slices (tableaux dynamiques)
+
+### Création et manipulation
+```go
+// Slice littéral
+fruits := []string{"pomme", "banane", "orange"}
+
+// Depuis un array
+nombres := [5]int{1, 2, 3, 4, 5}
+slice := nombres[1:4]          // [2, 3, 4]
+
+// Avec make
+scores := make([]int, 3)       // [0, 0, 0] - longueur 3
+buffer := make([]byte, 0, 10)  // [] - longueur 0, capacité 10
+```
+
+### Opérations sur les slices
+```go
+slice := []int{1, 2, 3}
+
+// Ajouter des éléments
+slice = append(slice, 4)       // [1, 2, 3, 4]
+slice = append(slice, 5, 6, 7) // [1, 2, 3, 4, 5, 6, 7]
+
+// Concaténer des slices
+autre := []int{8, 9, 10}
+slice = append(slice, autre...)  // [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+// Sous-slices
+debut := slice[0:3]            // [1, 2, 3]
+fin := slice[7:]              // [8, 9, 10]
+milieu := slice[2:5]          // [3, 4, 5]
+
+// Propriétés
+longueur := len(slice)         // 10
+capacite := cap(slice)         // Capacité allouée
+```
+
+### Copie de slices
+```go
+source := []int{1, 2, 3, 4, 5}
+destination := make([]int, len(source))
+
+// Copie sécurisée
+copy(destination, source)      // destination = [1, 2, 3, 4, 5]
+
+// Attention : les slices partagent la mémoire !
+a := []int{1, 2, 3}
+b := a                         // b pointe vers les mêmes données
+b[0] = 999                     // a[0] devient aussi 999 !
+```
+
+## Collections : Maps (dictionnaires)
+
+### Création et initialisation
+```go
+// Map littéral
+ages := map[string]int{
+    "Alice": 25,
+    "Bob":   30,
+    "Carol": 35,
+}
+
+// Map vide
+scores := make(map[string]int)
+
+// Map avec capacité initiale
+cache := make(map[string]interface{}, 100)
+```
+
+### Opérations sur les maps
+```go
+ages := map[string]int{
+    "Alice": 25,
+    "Bob":   30,
+}
+
+// Ajouter/modifier
+ages["Carol"] = 35
+ages["Alice"] = 26             // Modification
+
+// Accès sécurisé
+age, existe := ages["Alice"]
+if existe {
+    fmt.Printf("Alice a %d ans\n", age)
+} else {
+    fmt.Println("Alice non trouvée")
+}
+
+// Supprimer
+delete(ages, "Bob")
+
+// Itération
+for nom, age := range ages {
+    fmt.Printf("%s: %d ans\n", nom, age)
+}
+
+// Taille
+taille := len(ages)
+```
+
+## Pointeurs
+
+### Concepts de base
+```go
+x := 42
+p := &x                        // p pointe vers l'adresse de x
+fmt.Println(p)                 // Affiche l'adresse (ex: 0xc0000180a8)
+fmt.Println(*p)                // Déréférence: affiche 42
+
+// Modification via pointeur
+*p = 21
+fmt.Println(x)                 // x vaut maintenant 21
+```
+
+### Pointeurs et fonctions
+```go
+func doubler(n *int) {
+    *n = *n * 2                // Modifie la valeur originale
+}
+
+func main() {
+    nombre := 5
+    doubler(&nombre)           // Passe l'adresse
+    fmt.Println(nombre)        // 10
+}
+```
+
+### Pointeurs vers structures
+```go
+type Personne struct {
+    Nom string
+    Age int
+}
+
+func main() {
+    p := &Personne{Nom: "Alice", Age: 25}
+    
+    // Deux façons équivalentes d'accéder aux champs
+    fmt.Println(p.Nom)         // Alice (sucre syntaxique)
+    fmt.Println((*p).Nom)      // Alice (déréférence explicite)
+    
+    // Modification
+    p.Age = 26                 // Équivalent à (*p).Age = 26
+}
+```
+
+## Structures (struct)
+
+### Définition et utilisation
+```go
+type Utilisateur struct {
+    ID       int
+    Nom      string
+    Email    string
+    Age      int
+    Actif    bool
+}
+
+// Création d'instances
+user1 := Utilisateur{
+    ID:    1,
+    Nom:   "Alice",
+    Email: "alice@example.com",
+    Age:   25,
+    Actif: true,
+}
+
+// Création positionnelle (déconseillée)
+user2 := Utilisateur{2, "Bob", "bob@example.com", 30, true}
+
+// Création partielle
+user3 := Utilisateur{Nom: "Carol", Email: "carol@example.com"}
+// ID=0, Age=0, Actif=false (valeurs zéro)
+```
+
+### Structures imbriquées
+```go
+type Adresse struct {
+    Rue    string
+    Ville  string
+    CP     string
+}
+
+type Personne struct {
+    Nom     string
+    Age     int
+    Adresse Adresse        // Structure imbriquée
+}
+
+// Utilisation
+p := Personne{
+    Nom: "Alice",
+    Age: 25,
+    Adresse: Adresse{
+        Rue:   "123 Main St",
+        Ville: "Paris",
+        CP:    "75001",
+    },
+}
+
+fmt.Println(p.Adresse.Ville)   // "Paris"
+```
+
+### Tags de structure
+```go
+import "encoding/json"
+
+type Produit struct {
+    ID          int     `json:"id"`
+    Nom         string  `json:"name"`
+    Prix        float64 `json:"price"`
+    Description string  `json:"description,omitempty"`
+}
+
+// Sérialisation JSON
+p := Produit{ID: 1, Nom: "Ordinateur", Prix: 999.99}
+jsonData, _ := json.Marshal(p)
+fmt.Println(string(jsonData))
+// {"id":1,"name":"Ordinateur","price":999.99}
+```
+
+## Conversion de types
+
+### Conversions numériques
+```go
+var i int = 42
+var f float64 = float64(i)     // int vers float64
+var u uint = uint(f)           // float64 vers uint
+
+// Attention aux pertes de précision
+var precis float64 = 3.7
+var entier int = int(precis)   // 3 (troncature)
+```
+
+### Conversions de chaînes
+```go
+import "strconv"
+
+// String vers nombre
+str := "123"
+num, err := strconv.Atoi(str)  // int, error
+if err != nil {
+    fmt.Println("Erreur de conversion")
+}
+
+// Parsing plus précis
+prix, err := strconv.ParseFloat("19.99", 64)  // float64
+
+// Nombre vers string
+age := 25
+ageStr := strconv.Itoa(age)    // "25"
+prixStr := strconv.FormatFloat(prix, 'f', 2, 64)  // "19.99"
+```
+
+### Conversions avec interface{}
+```go
+func traiterValeur(v interface{}) {
+    switch val := v.(type) {
+    case int:
+        fmt.Printf("Entier: %d\n", val)
+    case string:
+        fmt.Printf("Chaîne: %s\n", val)
+    case bool:
+        fmt.Printf("Booléen: %t\n", val)
+    default:
+        fmt.Printf("Type inconnu: %T\n", val)
+    }
+}
+```
+
+## Exercices pratiques
+
+### Exercice 1 : Gestion d'inventaire
+```go
+type Produit struct {
+    ID       int
+    Nom      string
+    Prix     float64
+    Quantite int
+}
+
+func main() {
+    inventaire := []Produit{
+        {1, "Ordinateur", 999.99, 5},
+        {2, "Souris", 29.99, 50},
+        {3, "Clavier", 79.99, 20},
+    }
+    
+    var valeurTotale float64
+    for _, produit := range inventaire {
+        valeur := produit.Prix * float64(produit.Quantite)
+        valeurTotale += valeur
+        fmt.Printf("%s: %.2f€ × %d = %.2f€\n", 
+            produit.Nom, produit.Prix, produit.Quantite, valeur)
+    }
+    
+    fmt.Printf("Valeur totale de l'inventaire: %.2f€\n", valeurTotale)
+}
+```
+
+### Exercice 2 : Carnet d'adresses
+```go
+type Contact struct {
+    Nom       string
+    Telephone string
+    Email     string
+}
+
+func main() {
+    carnet := make(map[string]Contact)
+    
+    // Ajouter des contacts
+    carnet["alice"] = Contact{
+        Nom:       "Alice Dupont",
+        Telephone: "01 23 45 67 89",
+        Email:     "alice@example.com",
+    }
+    
+    carnet["bob"] = Contact{
+        Nom:       "Bob Martin",
+        Telephone: "01 98 76 54 32",
+        Email:     "bob@example.com",
+    }
+    
+    // Rechercher un contact
+    nom := "alice"
+    if contact, existe := carnet[nom]; existe {
+        fmt.Printf("Contact trouvé:\n")
+        fmt.Printf("Nom: %s\n", contact.Nom)
+        fmt.Printf("Téléphone: %s\n", contact.Telephone)
+        fmt.Printf("Email: %s\n", contact.Email)
+    } else {
+        fmt.Printf("Contact '%s' non trouvé\n", nom)
+    }
+}
+```
+
+### Exercice 3 : Statistiques de données
+```go
+func statistiques(nombres []float64) (min, max, moyenne float64) {
+    if len(nombres) == 0 {
+        return 0, 0, 0
+    }
+    
+    min = nombres[0]
+    max = nombres[0]
+    var somme float64
+    
+    for _, n := range nombres {
+        if n < min {
+            min = n
+        }
+        if n > max {
+            max = n
+        }
+        somme += n
+    }
+    
+    moyenne = somme / float64(len(nombres))
+    return
+}
+
+func main() {
+    scores := []float64{85.5, 92.0, 78.5, 96.0, 88.5, 91.0}
+    
+    min, max, moy := statistiques(scores)
+    
+    fmt.Printf("Nombre de scores: %d\n", len(scores))
+    fmt.Printf("Score minimum: %.1f\n", min)
+    fmt.Printf("Score maximum: %.1f\n", max)
+    fmt.Printf("Score moyen: %.1f\n", moy)
+}
+```
+
+## Récapitulatif des valeurs zéro
+
+| Type | Valeur zéro |
+|------|-------------|
+| `bool` | `false` |
+| `int`, `int8`, `int16`, `int32`, `int64` | `0` |
+| `uint`, `uint8`, `uint16`, `uint32`, `uint64` | `0` |
+| `float32`, `float64` | `0.0` |
+| `string` | `""` (chaîne vide) |
+| `[]type` (slice) | `nil` |
+| `map[type]type` | `nil` |
+| `*type` (pointeur) | `nil` |
+| `struct` | Tous les champs à leur valeur zéro |
+
+## Prochaine étape
+
+Parfait ! Vous maîtrisez maintenant :
+- ✅ Tous les types de base de Go
+- ✅ La déclaration de variables et constantes
+- ✅ Les collections (arrays, slices, maps)
+- ✅ Les pointeurs et structures
+- ✅ Les conversions de types
+
+👉 **[Découvrons les structures de contrôle](/structures-controle)**
+
+---
+
+> **💡 Astuce** : Go privilégie la simplicité. Si vous hésitez entre plusieurs types, choisissez `int` pour les entiers, `float64` pour les décimaux, et `string` pour les textes !

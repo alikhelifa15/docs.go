@@ -1,0 +1,145 @@
+{
+  "name": "Go Docs",
+  "description": "Maîtrisez Go de A à Z",
+  "logo": {
+    "src": "./logo.svg",
+    "alt": "Go Documentation Logo",
+    "href": "/"
+  },
+  "favicon": "/favicon.ico",
+  "theme": {
+    "primaryColor": "#00ADD8",
+    "accentColor": "#0066CC"
+  },
+  "social": {
+    "github": "https://github.com/votre-username/go-docs",
+    "twitter": "@VotreCompte"
+  },
+  "footer": {
+    "text": "Documentation Go - Fait avec ❤️ pour la communauté Gopher",
+    "links": [
+      {
+        "text": "Site officiel Go",
+        "href": "https://golang.org"
+      },
+      {
+        "text": "GitHub",
+        "href": "https://github.com/golang/go"
+      }
+    ]
+  },
+  "sidebar": [
+    {
+      "group": "🚀 Commencer",
+      "pages": [
+        {
+          "title": "Introduction à Go",
+          "href": "/",
+          "icon": "rocket",
+          "description": "Découvrez Go et ses avantages"
+        },
+        {
+          "title": "Installation",
+          "href": "/installation",
+          "icon": "download",
+          "description": "Configurez votre environnement Go"
+        },
+        {
+          "title": "Premier programme",
+          "href": "/premier-programme",
+          "icon": "code",
+          "description": "Hello World et premiers concepts"
+        }
+      ]
+    },
+    {
+      "group": "📚 Bases du langage",
+      "pages": [
+        {
+          "title": "Variables et types",
+          "href": "/variables-types",
+          "icon": "variable",
+          "description": "Types de données et déclarations"
+        },
+        {
+          "title": "Structures de contrôle",
+          "href": "/structures-controle",
+          "icon": "git-branch",
+          "description": "Conditions, boucles et flux"
+        },
+        {
+          "title": "Fonctions",
+          "href": "/fonctions",
+          "icon": "function",
+          "description": "Fonctions, méthodes et closures"
+        },
+        {
+          "title": "Packages",
+          "href": "/packages",
+          "icon": "package",
+          "description": "Organisation et modules"
+        }
+      ]
+    },
+    {
+      "group": "⚡ Concepts avancés",
+      "pages": [
+        {
+          "title": "Concurrence",
+          "href": "/concurrence",
+          "icon": "cpu",
+          "description": "Goroutines et channels"
+        },
+        {
+          "title": "Interfaces",
+          "href": "/interfaces",
+          "icon": "layers",
+          "description": "Polymorphisme et composition"
+        },
+        {
+          "title": "Gestion d'erreurs",
+          "href": "/gestion-erreurs",
+          "icon": "alert-triangle",
+          "description": "Patterns et bonnes pratiques"
+        },
+        {
+          "title": "Tests",
+          "href": "/tests",
+          "icon": "check-circle",
+          "description": "Tests, mocks et benchmarks"
+        }
+      ]
+    },
+    {
+      "group": "🎯 Pratique",
+      "pages": [
+        {
+          "title": "Projets pratiques",
+          "href": "/projets",
+          "icon": "folder",
+          "description": "CLI, API REST, microservices"
+        },
+        {
+          "title": "Bonnes pratiques",
+          "href": "/bonnes-pratiques",
+          "icon": "star",
+          "description": "Code production-ready"
+        },
+        {
+          "title": "Conclusion & Suite",
+          "href": "/conclusion",
+          "icon": "flag",
+          "description": "Roadmap et ressources"
+        }
+      ]
+    }
+  ],
+  "search": {
+    "enabled": true,
+    "placeholder": "Rechercher dans la documentation..."
+  },
+  "editPage": {
+    "enabled": true,
+    "baseUrl": "https://github.com/votre-username/go-docs/edit/main/docs"
+  }
+}
