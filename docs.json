@@ -2,8 +2,8 @@
   "name": "Go Docs",
   "description": "Maîtrisez Go de A à Z",
   "logo": {
-    "light": "https://cdn-icons-png.flaticon.com/24/2702/2702154.png",
-    "dark": "https://cdn-icons-png.flaticon.com/24/2702/2702172.png"
+    "light": "https://i.postimg.cc/bJz31YPn/logo.png",
+    "dark": "https://i.postimg.cc/bJz31YPn/logo.png"
   },
    "favicon": {
     "light": "https://cdn-icons-png.flaticon.com/24/9664/9664027.png",
@@ -15,7 +15,8 @@
   },
   "social": {
     "github": "https://github.com/alikhelifa15/docs.go",
-    "twitter": "@VotreCompte"
+    "linkedin": "https://www.linkedin.com/in/ali-khelifa-1062a4356/"
+    
   },
   "footer": {
     "text": "Documentation Go - Fait avec ❤️ pour la communauté Gopher",
