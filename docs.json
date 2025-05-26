@@ -6,7 +6,7 @@
     "alt": "Go Documentation Logo",
     "href": "/"
   },
-  "favicon": "/favicon.ico",
+  "favicon": "/logo.svg",
   "theme": {
     "primaryColor": "#00ADD8",
     "accentColor": "#0066CC"
