@@ -5,7 +5,7 @@
     "light": "https://i.postimg.cc/bJz31YPn/logo.png",
     "dark": "https://i.postimg.cc/bJz31YPn/logo.png"
   },
-   "favicon": {
+  "favicon": {
     "light": "https://i.postimg.cc/bJz31YPn/logo.png",
     "dark": "https://i.postimg.cc/bJz31YPn/logo.png"
   },
@@ -16,7 +16,6 @@
   "social": {
     "github": "/alikhelifa15/docs.go",
     "linkedin": "/ali-khelifa-1062a4356/"
-    
   },
   "footer": {
     "text": "Documentation Go - Fait avec ❤️ pour la communauté Gopher",
@@ -138,11 +137,18 @@
     }
   ],
   "search": {
-    "enabled": true,
-    "placeholder": "Rechercher dans la documentation..."
-  },
-  "editPage": {
-    "enabled": true,
-    "baseUrl": "https://github.com/votre-username/go-docs/edit/main/docs"
+    "docsearch": {
+      "appId": "GPEIGC2DZA",
+
+      "apiKey": "1bdd3b411115c8d5bc9d06c1018f14c0",
+
+      "indexName": "page",
+
+      "insights": true,
+
+      "container": "### REPLACE ME WITH A CONTAINER (e.g. div) ###",
+
+      "debug": false
+    }
   }
 }
