@@ -1,0 +1,171 @@
+---
+title: Génériques en Go (1.18+)
+description: Guide complet sur les types et fonctions génériques en Go
+---
+
+# 🧩 Génériques en Go
+
+## Introduction
+
+Les génériques ont été introduits dans Go 1.18, apportant une nouvelle dimension au langage. Cette fonctionnalité permet d'écrire du code plus flexible et réutilisable sans sacrifier la sécurité de type.
+
+## Pourquoi les génériques ?
+
+Avant Go 1.18, pour écrire des fonctions travaillant avec différents types, on devait souvent :
+- Écrire plusieurs versions de la même fonction
+- Utiliser le type `interface{}` et effectuer des assertions de type
+- Générer du code via des outils externes
+
+## Types de paramètres
+
+### Déclaration de contraintes
+
+```go
+type Number interface {
+    ~int | ~float64 | ~float32
+}
+```
+
+### Fonctions génériques
+
+```go
+// Fonction générique pour trouver le minimum entre deux valeurs
+func Min[T Number](a, b T) T {
+    if a < b {
+        return a
+    }
+    return b
+}
+
+// Utilisation
+minInt := Min(3, 7)        // 3
+minFloat := Min(3.14, 2.71) // 2.71
+```
+
+## Types génériques
+
+### Définition d'un type générique
+
+```go
+// Stack générique
+type Stack[T any] struct {
+    items []T
+}
+
+func (s *Stack[T]) Push(item T) {
+    s.items = append(s.items, item)
+}
+
+func (s *Stack[T]) Pop() T {
+    if len(s.items) == 0 {
+        panic("stack is empty")
+    }
+    item := s.items[len(s.items)-1]
+    s.items = s.items[:len(s.items)-1]
+    return item
+}
+
+// Utilisation
+var intStack Stack[int]
+intStack.Push(1)
+intStack.Push(2)
+fmt.Println(intStack.Pop()) // Affiche 2
+```
+
+## Contraintes intégrées
+
+Go fournit plusieurs contraintes prédéfinies dans le package `constraints` :
+
+```go
+import "golang.org/x/exp/constraints"
+
+// Contraintes utiles :
+// - constraints.Ordered  : types ordonnés (<, >, <=, >=)
+// - constraints.Integer  : tous les entiers
+// - constraints.Float    : tous les flottants
+// - constraints.Complex  : nombres complexes
+// - constraints.Unsigned : entiers non signés
+```
+
+## Bonnes pratiques
+
+1. **Ne pas abuser des génériques** : Utilisez-les quand ils simplifient réellement le code
+2. **Nommez clairement les paramètres de type** : Utilisez des noms descriptifs comme `T`, `K`, `V`
+3. **Documentez les contraintes** : Expliquez les attentes sur les types génériques
+4. **Évitez les génériques pour les méthodes** : Préférez les fonctions génériques aux méthodes génériques quand c'est possible
+
+## Exemple complet : Map, Filter, Reduce
+
+```go
+func Map[T any, U any](s []T, f func(T) U) []U {
+    result := make([]U, len(s))
+    for i, v := range s {
+        result[i] = f(v)
+    }
+    return result
+}
+
+func Filter[T any](s []T, f func(T) bool) []T {
+    var result []T
+    for _, v := range s {
+        if f(v) {
+            result = append(result, v)
+        }
+    }
+    return result
+}
+
+func Reduce[T any, U any](s []T, init U, f func(U, T) U) U {
+    result := init
+    for _, v := range s {
+        result = f(result, v)
+    }
+    return result
+}
+
+// Utilisation
+numbers := []int{1, 2, 3, 4, 5}
+
+// Carré des nombres
+squares := Map(numbers, func(n int) int {
+    return n * n
+})
+
+// Nombres pairs
+evens := Filter(numbers, func(n int) bool {
+    return n%2 == 0
+})
+
+// Somme des carrés
+sum := Reduce(squares, 0, func(a, b int) int {
+    return a + b
+})
+```
+
+## Limitations
+
+1. Pas de méthodes génériques (seulement les types et fonctions)
+2. Pas de spécialisation de type
+3. Pas de métaprogrammation
+
+## Quand utiliser les génériques ?
+
+- Pour les structures de données génériques (piles, files, arbres, etc.)
+- Pour les algorithmes qui fonctionnent sur plusieurs types numériques
+- Pour éviter la duplication de code similaire pour différents types
+
+## Exercices
+
+1. Implémentez une file d'attente (queue) générique
+2. Créez une fonction `Contains` générique qui vérifie si une valeur est présente dans une slice
+3. Implémentez une fonction `Keys` qui retourne les clés d'une map sous forme de slice
+
+## Ressources supplémentaires
+
+- [Go Blog: Introduction to Generics](https://go.dev/blog/intro-generics)
+- [Go 1.18 Release Notes](https://golang.org/doc/go1.18)
+- [Go Generics by Example](https://go.dev/blog/generics-proposal)
+
+---
+
+Avec cette nouvelle section, votre documentation couvre maintenant une fonctionnalité majeure de Go moderne. Les génériques sont particulièrement utiles pour écrire du code plus sûr et plus réutilisable tout en maintenant les performances de Go.

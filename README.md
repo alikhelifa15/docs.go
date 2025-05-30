@@ -28,6 +28,7 @@ Documentation française complète pour apprendre le langage Go, du niveau débu
 ### ⚡ Concepts avancés
 - **Concurrence** - Goroutines, channels, patterns
 - **Interfaces** - Polymorphisme et composition
+- **Génériques** - Types et fonctions génériques (Go 1.18+)
 - **Gestion d'erreurs** - Patterns et bonnes pratiques
 - **Tests** - Tests unitaires, mocks, benchmarks
 
