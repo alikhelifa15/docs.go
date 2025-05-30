@@ -111,6 +111,12 @@
           "description": "Patterns et bonnes pratiques"
         },
         {
+          "title": "Design Patterns",
+          "href": "/design-patterns",
+          "icon": "puzzle",
+          "description": "Patterns de conception idiomatiques"
+        },
+        {
           "title": "Tests",
           "href": "/tests",
           "icon": "check-circle",

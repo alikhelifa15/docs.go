@@ -1,0 +1,1219 @@
+---
+title: Design Patterns
+description: Patterns de conception idiomatiques en Go
+---
+
+# Design Patterns en Go
+
+Go privilégie la composition over l'héritage et les interfaces simples. Les patterns classiques s'adaptent à la philosophie du langage avec des implémentations élégantes et idiomatiques.
+
+## Patterns créationnels
+
+### Singleton Pattern
+
+Le pattern Singleton garantit qu'une classe n'a qu'une seule instance et fournit un point d'accès global.
+
+#### Implémentation thread-safe avec sync.Once
+
+```go
+package main
+
+import (
+    "fmt"
+    "sync"
+)
+
+// Configuration globale de l'application
+type Config struct {
+    DatabaseURL    string
+    APIKey        string
+    MaxConnections int
+    Debug         bool
+}
+
+var (
+    configInstance *Config
+    configOnce     sync.Once
+)
+
+// GetConfig retourne l'instance unique de configuration
+func GetConfig() *Config {
+    configOnce.Do(func() {
+        fmt.Println("Initialisation de la configuration...")
+        configInstance = &Config{
+            DatabaseURL:    "postgres://localhost:5432/mydb",
+            APIKey:        "secret-api-key",
+            MaxConnections: 100,
+            Debug:         true,
+        }
+    })
+    return configInstance
+}
+
+// Méthodes de configuration
+func (c *Config) SetDebug(debug bool) {
+    c.Debug = debug
+}
+
+func (c *Config) GetDatabaseURL() string {
+    return c.DatabaseURL
+}
+
+func main() {
+    // Premier accès
+    config1 := GetConfig()
+    fmt.Printf("Config 1: %+v\n", config1)
+
+    // Deuxième accès - même instance
+    config2 := GetConfig()
+    fmt.Printf("Config 2: %+v\n", config2)
+
+    // Vérification que c'est la même instance
+    fmt.Printf("Même instance? %t\n", config1 == config2)
+
+    // Modification via une instance
+    config1.SetDebug(false)
+    fmt.Printf("Debug via config2: %t\n", config2.Debug)
+}
+```
+
+#### Singleton avec initialisation lazy
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+    "sync"
+)
+
+type Logger struct {
+    level  string
+    output string
+}
+
+var (
+    loggerInstance *Logger
+    loggerMutex    sync.Mutex
+)
+
+func GetLogger() *Logger {
+    if loggerInstance == nil {
+        loggerMutex.Lock()
+        defer loggerMutex.Unlock()
+
+        // Double check locking
+        if loggerInstance == nil {
+            fmt.Println("Création du logger...")
+            loggerInstance = &Logger{
+                level:  "INFO",
+                output: "console",
+            }
+        }
+    }
+    return loggerInstance
+}
+
+func (l *Logger) Log(message string) {
+    fmt.Printf("[%s] %s\n", l.level, message)
+}
+
+func (l *Logger) SetLevel(level string) {
+    l.level = level
+}
+
+func main() {
+    logger1 := GetLogger()
+    logger2 := GetLogger()
+
+    logger1.Log("Premier message")
+    logger2.Log("Deuxième message")
+
+    fmt.Printf("Même instance? %t\n", logger1 == logger2)
+}
+```
+
+### Factory Pattern
+
+Le Factory Pattern crée des objets sans spécifier leur classe exacte.
+
+#### Simple Factory
+
+```go
+package main
+
+import (
+    "fmt"
+    "strings"
+)
+
+// Interface commune
+type Animal interface {
+    Speak() string
+    Move() string
+}
+
+// Implémentations concrètes
+type Dog struct {
+    Name string
+}
+
+func (d Dog) Speak() string {
+    return "Woof!"
+}
+
+func (d Dog) Move() string {
+    return d.Name + " runs"
+}
+
+type Cat struct {
+    Name string
+}
+
+func (c Cat) Speak() string {
+    return "Meow!"
+}
+
+func (c Cat) Move() string {
+    return c.Name + " jumps"
+}
+
+type Bird struct {
+    Name string
+}
+
+func (b Bird) Speak() string {
+    return "Tweet!"
+}
+
+func (b Bird) Move() string {
+    return b.Name + " flies"
+}
+
+// Factory function
+func CreateAnimal(animalType, name string) (Animal, error) {
+    switch strings.ToLower(animalType) {
+    case "dog":
+        return Dog{Name: name}, nil
+    case "cat":
+        return Cat{Name: name}, nil
+    case "bird":
+        return Bird{Name: name}, nil
+    default:
+        return nil, fmt.Errorf("type d'animal inconnu: %s", animalType)
+    }
+}
+
+func main() {
+    animals := []struct {
+        animalType string
+        name       string
+    }{
+        {"dog", "Rex"},
+        {"cat", "Whiskers"},
+        {"bird", "Tweety"},
+        {"fish", "Nemo"}, // Type non supporté
+    }
+
+    for _, spec := range animals {
+        animal, err := CreateAnimal(spec.animalType, spec.name)
+        if err != nil {
+            fmt.Printf("Erreur: %v\n", err)
+            continue
+        }
+
+        fmt.Printf("%s dit: %s et %s\n",
+            spec.name, animal.Speak(), animal.Move())
+    }
+}
+```
+
+#### Abstract Factory
+
+```go
+package main
+
+import "fmt"
+
+// Interfaces produits
+type Button interface {
+    Render() string
+    Click() string
+}
+
+type TextField interface {
+    Render() string
+    GetValue() string
+}
+
+// Interface Abstract Factory
+type UIFactory interface {
+    CreateButton(text string) Button
+    CreateTextField(placeholder string) TextField
+}
+
+// === Famille Windows ===
+type WindowsButton struct {
+    text string
+}
+
+func (b WindowsButton) Render() string {
+    return fmt.Sprintf("[Windows Button: %s]", b.text)
+}
+
+func (b WindowsButton) Click() string {
+    return "Windows button clicked!"
+}
+
+type WindowsTextField struct {
+    placeholder string
+    value       string
+}
+
+func (t WindowsTextField) Render() string {
+    return fmt.Sprintf("[Windows Input: %s]", t.placeholder)
+}
+
+func (t WindowsTextField) GetValue() string {
+    return t.value
+}
+
+type WindowsFactory struct{}
+
+func (f WindowsFactory) CreateButton(text string) Button {
+    return WindowsButton{text: text}
+}
+
+func (f WindowsFactory) CreateTextField(placeholder string) TextField {
+    return WindowsTextField{placeholder: placeholder}
+}
+
+// === Famille macOS ===
+type MacOSButton struct {
+    text string
+}
+
+func (b MacOSButton) Render() string {
+    return fmt.Sprintf("◉ macOS Button: %s ◉", b.text)
+}
+
+func (b MacOSButton) Click() string {
+    return "macOS button clicked with style!"
+}
+
+type MacOSTextField struct {
+    placeholder string
+    value       string
+}
+
+func (t MacOSTextField) Render() string {
+    return fmt.Sprintf("⬜ macOS Input: %s ⬜", t.placeholder)
+}
+
+func (t MacOSTextField) GetValue() string {
+    return t.value
+}
+
+type MacOSFactory struct{}
+
+func (f MacOSFactory) CreateButton(text string) Button {
+    return MacOSButton{text: text}
+}
+
+func (f MacOSFactory) CreateTextField(placeholder string) TextField {
+    return MacOSTextField{placeholder: placeholder}
+}
+
+// Factory creator
+func GetUIFactory(os string) UIFactory {
+    switch os {
+    case "windows":
+        return WindowsFactory{}
+    case "macos":
+        return MacOSFactory{}
+    default:
+        return WindowsFactory{} // Default
+    }
+}
+
+// Application client
+func CreateLoginForm(factory UIFactory) {
+    button := factory.CreateButton("Se connecter")
+    usernameField := factory.CreateTextField("Nom d'utilisateur")
+    passwordField := factory.CreateTextField("Mot de passe")
+
+    fmt.Println("=== Formulaire de connexion ===")
+    fmt.Println(usernameField.Render())
+    fmt.Println(passwordField.Render())
+    fmt.Println(button.Render())
+    fmt.Println(button.Click())
+}
+
+func main() {
+    fmt.Println("Application Windows:")
+    windowsFactory := GetUIFactory("windows")
+    CreateLoginForm(windowsFactory)
+
+    fmt.Println("\nApplication macOS:")
+    macFactory := GetUIFactory("macos")
+    CreateLoginForm(macFactory)
+}
+```
+
+### Builder Pattern
+
+Le Builder Pattern construit des objets complexes étape par étape.
+
+#### Builder pour configuration complexe
+
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+// Objet complexe à construire
+type DatabaseConfig struct {
+    Host            string
+    Port            int
+    Username        string
+    Password        string
+    Database        string
+    SSLMode         string
+    MaxConnections  int
+    ConnectTimeout  time.Duration
+    ReadTimeout     time.Duration
+    WriteTimeout    time.Duration
+    RetryAttempts   int
+    EnableLogging   bool
+    PoolSize        int
+}
+
+// Builder
+type DatabaseConfigBuilder struct {
+    config *DatabaseConfig
+}
+
+// NewDatabaseConfigBuilder crée un nouveau builder
+func NewDatabaseConfigBuilder() *DatabaseConfigBuilder {
+    return &DatabaseConfigBuilder{
+        config: &DatabaseConfig{
+            // Valeurs par défaut
+            Host:           "localhost",
+            Port:           5432,
+            SSLMode:        "disable",
+            MaxConnections: 10,
+            ConnectTimeout: 30 * time.Second,
+            ReadTimeout:    30 * time.Second,
+            WriteTimeout:   30 * time.Second,
+            RetryAttempts:  3,
+            EnableLogging:  false,
+            PoolSize:       5,
+        },
+    }
+}
+
+// Méthodes de construction fluide
+func (b *DatabaseConfigBuilder) Host(host string) *DatabaseConfigBuilder {
+    b.config.Host = host
+    return b
+}
+
+func (b *DatabaseConfigBuilder) Port(port int) *DatabaseConfigBuilder {
+    b.config.Port = port
+    return b
+}
+
+func (b *DatabaseConfigBuilder) Credentials(username, password string) *DatabaseConfigBuilder {
+    b.config.Username = username
+    b.config.Password = password
+    return b
+}
+
+func (b *DatabaseConfigBuilder) Database(database string) *DatabaseConfigBuilder {
+    b.config.Database = database
+    return b
+}
+
+func (b *DatabaseConfigBuilder) SSL(mode string) *DatabaseConfigBuilder {
+    b.config.SSLMode = mode
+    return b
+}
+
+func (b *DatabaseConfigBuilder) ConnectionPool(maxConnections, poolSize int) *DatabaseConfigBuilder {
+    b.config.MaxConnections = maxConnections
+    b.config.PoolSize = poolSize
+    return b
+}
+
+func (b *DatabaseConfigBuilder) Timeouts(connect, read, write time.Duration) *DatabaseConfigBuilder {
+    b.config.ConnectTimeout = connect
+    b.config.ReadTimeout = read
+    b.config.WriteTimeout = write
+    return b
+}
+
+func (b *DatabaseConfigBuilder) Retry(attempts int) *DatabaseConfigBuilder {
+    b.config.RetryAttempts = attempts
+    return b
+}
+
+func (b *DatabaseConfigBuilder) EnableLogging() *DatabaseConfigBuilder {
+    b.config.EnableLogging = true
+    return b
+}
+
+// Build finalise la construction
+func (b *DatabaseConfigBuilder) Build() (*DatabaseConfig, error) {
+    // Validation
+    if b.config.Database == "" {
+        return nil, fmt.Errorf("database name is required")
+    }
+    if b.config.Username == "" {
+        return nil, fmt.Errorf("username is required")
+    }
+    if b.config.MaxConnections <= 0 {
+        return nil, fmt.Errorf("max connections must be positive")
+    }
+
+    return b.config, nil
+}
+
+// String pour affichage
+func (d *DatabaseConfig) String() string {
+    return fmt.Sprintf(`DatabaseConfig{
+    Host: %s:%d
+    Database: %s
+    User: %s
+    SSL: %s
+    MaxConnections: %d
+    PoolSize: %d
+    ConnectTimeout: %v
+    ReadTimeout: %v
+    WriteTimeout: %v
+    RetryAttempts: %d
+    Logging: %t
+}`, d.Host, d.Port, d.Database, d.Username, d.SSLMode,
+        d.MaxConnections, d.PoolSize, d.ConnectTimeout,
+        d.ReadTimeout, d.WriteTimeout, d.RetryAttempts, d.EnableLogging)
+}
+
+func main() {
+    // Configuration simple
+    config1, err := NewDatabaseConfigBuilder().
+        Host("prod-db.company.com").
+        Port(5432).
+        Credentials("api_user", "secret123").
+        Database("production_db").
+        Build()
+
+    if err != nil {
+        fmt.Printf("Erreur: %v\n", err)
+        return
+    }
+
+    fmt.Println("=== Configuration Production ===")
+    fmt.Println(config1)
+
+    // Configuration complète
+    config2, err := NewDatabaseConfigBuilder().
+        Host("dev-db.company.com").
+        Port(5433).
+        Credentials("dev_user", "dev123").
+        Database("development_db").
+        SSL("require").
+        ConnectionPool(50, 10).
+        Timeouts(10*time.Second, 5*time.Second, 5*time.Second).
+        Retry(5).
+        EnableLogging().
+        Build()
+
+    if err != nil {
+        fmt.Printf("Erreur: %v\n", err)
+        return
+    }
+
+    fmt.Println("\n=== Configuration Développement ===")
+    fmt.Println(config2)
+
+    // Configuration invalide
+    _, err = NewDatabaseConfigBuilder().
+        Host("invalid-db").
+        Build() // Manque database et username
+
+    if err != nil {
+        fmt.Printf("\n=== Erreur de validation ===\n%v\n", err)
+    }
+}
+```
+
+## Patterns comportementaux
+
+### Strategy Pattern
+
+Le Strategy Pattern définit une famille d'algorithmes et les rend interchangeables.
+
+#### Système de traitement de paiements
+
+```go
+package main
+
+import (
+    "fmt"
+    "strings"
+)
+
+// Interface Strategy
+type PaymentStrategy interface {
+    Pay(amount float64) error
+    GetName() string
+    ValidatePayment(amount float64) error
+}
+
+// Context
+type PaymentProcessor struct {
+    strategy PaymentStrategy
+}
+
+func NewPaymentProcessor(strategy PaymentStrategy) *PaymentProcessor {
+    return &PaymentProcessor{strategy: strategy}
+}
+
+func (p *PaymentProcessor) SetStrategy(strategy PaymentStrategy) {
+    p.strategy = strategy
+}
+
+func (p *PaymentProcessor) ProcessPayment(amount float64) error {
+    if p.strategy == nil {
+        return fmt.Errorf("aucune stratégie de paiement définie")
+    }
+
+    // Validation
+    if err := p.strategy.ValidatePayment(amount); err != nil {
+        return fmt.Errorf("validation échouée: %w", err)
+    }
+
+    // Traitement
+    fmt.Printf("Traitement du paiement de %.2f€ via %s\n", amount, p.strategy.GetName())
+    return p.strategy.Pay(amount)
+}
+
+// === Strategies concrètes ===
+
+// Carte de crédit
+type CreditCardStrategy struct {
+    CardNumber string
+    ExpiryDate string
+    CVV        string
+    HolderName string
+}
+
+func (c *CreditCardStrategy) GetName() string {
+    return "Carte de crédit"
+}
+
+func (c *CreditCardStrategy) ValidatePayment(amount float64) error {
+    if amount <= 0 {
+        return fmt.Errorf("montant invalide")
+    }
+    if amount > 5000 {
+        return fmt.Errorf("montant trop élevé pour carte de crédit (max: 5000€)")
+    }
+    if len(c.CardNumber) != 16 {
+        return fmt.Errorf("numéro de carte invalide")
+    }
+    return nil
+}
+
+func (c *CreditCardStrategy) Pay(amount float64) error {
+    maskedCard := c.CardNumber[:4] + "****" + c.CardNumber[12:]
+    fmt.Printf("  → Paiement de %.2f€ avec carte %s\n", amount, maskedCard)
+    fmt.Printf("  → Nom: %s\n", c.HolderName)
+    fmt.Println("  → Paiement autorisé")
+    return nil
+}
+
+// PayPal
+type PayPalStrategy struct {
+    Email    string
+    Password string
+}
+
+func (p *PayPalStrategy) GetName() string {
+    return "PayPal"
+}
+
+func (p *PayPalStrategy) ValidatePayment(amount float64) error {
+    if amount <= 0 {
+        return fmt.Errorf("montant invalide")
+    }
+    if !strings.Contains(p.Email, "@") {
+        return fmt.Errorf("email PayPal invalide")
+    }
+    return nil
+}
+
+func (p *PayPalStrategy) Pay(amount float64) error {
+    fmt.Printf("  → Connexion à PayPal avec %s\n", p.Email)
+    fmt.Printf("  → Paiement de %.2f€ via PayPal\n", amount)
+    fmt.Println("  → Transaction PayPal réussie")
+    return nil
+}
+
+// Virement bancaire
+type BankTransferStrategy struct {
+    AccountNumber string
+    BankCode      string
+    AccountHolder string
+}
+
+func (b *BankTransferStrategy) GetName() string {
+    return "Virement bancaire"
+}
+
+func (b *BankTransferStrategy) ValidatePayment(amount float64) error {
+    if amount <= 0 {
+        return fmt.Errorf("montant invalide")
+    }
+    if amount < 10 {
+        return fmt.Errorf("montant minimum pour virement: 10€")
+    }
+    if len(b.AccountNumber) < 10 {
+        return fmt.Errorf("numéro de compte invalide")
+    }
+    return nil
+}
+
+func (b *BankTransferStrategy) Pay(amount float64) error {
+    maskedAccount := b.AccountNumber[:4] + "****"
+    fmt.Printf("  → Virement de %.2f€ vers compte %s\n", amount, maskedAccount)
+    fmt.Printf("  → Titulaire: %s\n", b.AccountHolder)
+    fmt.Printf("  → Code banque: %s\n", b.BankCode)
+    fmt.Println("  → Virement initié (traitement en cours)")
+    return nil
+}
+
+func main() {
+    // Créer les stratégies
+    creditCard := &CreditCardStrategy{
+        CardNumber: "1234567890123456",
+        ExpiryDate: "12/25",
+        CVV:        "123",
+        HolderName: "Alice Dupont",
+    }
+
+    paypal := &PayPalStrategy{
+        Email:    "alice@example.com",
+        Password: "secret",
+    }
+
+    bankTransfer := &BankTransferStrategy{
+        AccountNumber: "1234567890",
+        BankCode:      "30004",
+        AccountHolder: "Alice Dupont",
+    }
+
+    // Processeur de paiements
+    processor := NewPaymentProcessor(creditCard)
+
+    // Test avec différentes stratégies
+    payments := []struct {
+        strategy PaymentStrategy
+        amount   float64
+    }{
+        {creditCard, 99.99},
+        {paypal, 49.99},
+        {bankTransfer, 299.99},
+        {creditCard, 6000}, // Trop élevé
+        {bankTransfer, 5},  // Trop bas
+    }
+
+    for i, payment := range payments {
+        fmt.Printf("\n=== Test %d ===\n", i+1)
+        processor.SetStrategy(payment.strategy)
+
+        if err := processor.ProcessPayment(payment.amount); err != nil {
+            fmt.Printf("❌ Erreur: %v\n", err)
+        } else {
+            fmt.Println("✅ Paiement réussi")
+        }
+    }
+}
+```
+
+### Observer Pattern
+
+Le pattern Observer notifie automatiquement les objets dépendants lors de changements d'état.
+
+#### Système de notifications d'événements
+
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+// Interface Observer
+type Observer interface {
+    Update(event Event)
+    GetID() string
+}
+
+// Interface Subject
+type Subject interface {
+    Subscribe(Observer)
+    Unsubscribe(Observer)
+    Notify(Event)
+}
+
+// Événement
+type Event struct {
+    Type      string
+    Message   string
+    Timestamp time.Time
+    Data      map[string]interface{}
+}
+
+// === Subject concret: Système d'actualités ===
+type NewsSystem struct {
+    observers []Observer
+}
+
+func NewNewsSystem() *NewsSystem {
+    return &NewsSystem{
+        observers: make([]Observer, 0),
+    }
+}
+
+func (ns *NewsSystem) Subscribe(observer Observer) {
+    ns.observers = append(ns.observers, observer)
+    fmt.Printf("📝 %s s'est abonné aux actualités\n", observer.GetID())
+}
+
+func (ns *NewsSystem) Unsubscribe(observer Observer) {
+    for i, obs := range ns.observers {
+        if obs.GetID() == observer.GetID() {
+            ns.observers = append(ns.observers[:i], ns.observers[i+1:]...)
+            fmt.Printf("📝 %s s'est désabonné des actualités\n", observer.GetID())
+            return
+        }
+    }
+}
+
+func (ns *NewsSystem) Notify(event Event) {
+    fmt.Printf("📢 Diffusion: %s\n", event.Message)
+    for _, observer := range ns.observers {
+        observer.Update(event)
+    }
+}
+
+func (ns *NewsSystem) PublishNews(eventType, message string, data map[string]interface{}) {
+    event := Event{
+        Type:      eventType,
+        Message:   message,
+        Timestamp: time.Now(),
+        Data:      data,
+    }
+    ns.Notify(event)
+}
+
+func (ns *NewsSystem) GetSubscriberCount() int {
+    return len(ns.observers)
+}
+
+// === Observers concrets ===
+
+// Utilisateur email
+type EmailSubscriber struct {
+    ID    string
+    Email string
+}
+
+func (e *EmailSubscriber) GetID() string {
+    return e.ID
+}
+
+func (e *EmailSubscriber) Update(event Event) {
+    fmt.Printf("📧 Email envoyé à %s (%s): %s\n", e.Email, e.ID, event.Message)
+    if event.Type == "URGENT" {
+        fmt.Printf("   ⚠️  URGENT - Notification prioritaire!\n")
+    }
+}
+
+// Utilisateur SMS
+type SMSSubscriber struct {
+    ID    string
+    Phone string
+}
+
+func (s *SMSSubscriber) GetID() string {
+    return s.ID
+}
+
+func (s *SMSSubscriber) Update(event Event) {
+    fmt.Printf("📱 SMS envoyé à %s (%s): %s\n", s.Phone, s.ID, event.Message)
+    if urgency, exists := event.Data["urgency"]; exists && urgency == "high" {
+        fmt.Printf("   🚨 Alerte SMS prioritaire!\n")
+    }
+}
+
+// Application mobile
+type MobileAppSubscriber struct {
+    ID     string
+    UserID string
+    Device string
+}
+
+func (m *MobileAppSubscriber) GetID() string {
+    return m.ID
+}
+
+func (m *MobileAppSubscriber) Update(event Event) {
+    fmt.Printf("📲 Push notification vers %s (%s - %s): %s\n",
+        m.Device, m.UserID, m.ID, event.Message)
+
+    if event.Type == "BREAKING" {
+        fmt.Printf("   💥 BREAKING NEWS - Notification en premier plan!\n")
+    }
+}
+
+// Logger système
+type SystemLogger struct {
+    ID       string
+    LogLevel string
+}
+
+func (l *SystemLogger) GetID() string {
+    return l.ID
+}
+
+func (l *SystemLogger) Update(event Event) {
+    timestamp := event.Timestamp.Format("2006-01-02 15:04:05")
+    fmt.Printf("📋 [%s] LOG (%s): [%s] %s\n",
+        timestamp, l.ID, event.Type, event.Message)
+
+    if event.Data != nil {
+        fmt.Printf("   📊 Données: %+v\n", event.Data)
+    }
+}
+
+func main() {
+    // Créer le système d'actualités
+    news := NewNewsSystem()
+
+    // Créer les abonnés
+    emailUser1 := &EmailSubscriber{
+        ID:    "user_alice",
+        Email: "alice@example.com",
+    }
+
+    emailUser2 := &EmailSubscriber{
+        ID:    "user_bob",
+        Email: "bob@example.com",
+    }
+
+    smsUser := &SMSSubscriber{
+        ID:    "user_carol",
+        Phone: "+33123456789",
+    }
+
+    mobileUser := &MobileAppSubscriber{
+        ID:     "user_david",
+        UserID: "david123",
+        Device: "iPhone 12",
+    }
+
+    logger := &SystemLogger{
+        ID:       "system_logger",
+        LogLevel: "INFO",
+    }
+
+    // Abonnements
+    news.Subscribe(emailUser1)
+    news.Subscribe(emailUser2)
+    news.Subscribe(smsUser)
+    news.Subscribe(mobileUser)
+    news.Subscribe(logger)
+
+    fmt.Printf("\n👥 Nombre d'abonnés: %d\n\n", news.GetSubscriberCount())
+
+    // Publier des actualités
+    fmt.Println("=== Publication d'actualité normale ===")
+    news.PublishNews("NEWS", "Nouvelle fonctionnalité disponible dans l'app!", map[string]interface{}{
+        "version": "2.1.0",
+        "feature": "dark_mode",
+    })
+
+    fmt.Println("\n=== Publication d'actualité urgente ===")
+    news.PublishNews("URGENT", "Maintenance système prévue ce soir", map[string]interface{}{
+        "urgency":   "high",
+        "duration":  "2h",
+        "startTime": "22:00",
+    })
+
+    fmt.Println("\n=== Publication breaking news ===")
+    news.PublishNews("BREAKING", "Faille de sécurité critique détectée!", map[string]interface{}{
+        "severity": "critical",
+        "affected": "all_users",
+        "action":   "immediate_update",
+    })
+
+    // Désabonnement
+    fmt.Println("\n=== Désabonnement ===")
+    news.Unsubscribe(smsUser)
+
+    fmt.Printf("👥 Nombre d'abonnés après désabonnement: %d\n\n", news.GetSubscriberCount())
+
+    // Nouvelle publication après désabonnement
+    fmt.Println("=== Publication après désabonnement ===")
+    news.PublishNews("NEWS", "Carol ne recevra plus cette notification", nil)
+}
+```
+
+## Patterns structurels
+
+### Decorator Pattern
+
+Le Decorator Pattern ajoute dynamiquement des responsabilités à un objet.
+
+#### Système de middleware HTTP
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+    "net/http"
+    "time"
+)
+
+// Interface de base
+type Handler interface {
+    Handle(w http.ResponseWriter, r *http.Request)
+}
+
+// Handler de base
+type BaseHandler struct{}
+
+func (h BaseHandler) Handle(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintf(w, "Hello from %s %s!", r.Method, r.URL.Path)
+}
+
+// === Decorators (Middlewares) ===
+
+// Logging middleware
+type LoggingDecorator struct {
+    handler Handler
+    logger  *log.Logger
+}
+
+func NewLoggingDecorator(handler Handler, logger *log.Logger) Handler {
+    return &LoggingDecorator{
+        handler: handler,
+        logger:  logger,
+    }
+}
+
+func (l *LoggingDecorator) Handle(w http.ResponseWriter, r *http.Request) {
+    start := time.Now()
+    l.logger.Printf("Started %s %s", r.Method, r.URL.Path)
+
+    l.handler.Handle(w, r)
+
+    duration := time.Since(start)
+    l.logger.Printf("Completed %s %s in %v", r.Method, r.URL.Path, duration)
+}
+
+// Authentication middleware
+type AuthDecorator struct {
+    handler Handler
+}
+
+func NewAuthDecorator(handler Handler) Handler {
+    return &AuthDecorator{handler: handler}
+}
+
+func (a *AuthDecorator) Handle(w http.ResponseWriter, r *http.Request) {
+    token := r.Header.Get("Authorization")
+
+    if token == "" {
+        http.Error(w, "Missing Authorization header", http.StatusUnauthorized)
+        return
+    }
+
+    if token != "Bearer valid-token" {
+        http.Error(w, "Invalid token", http.StatusUnauthorized)
+        return
+    }
+
+    fmt.Printf("🔐 User authenticated with token: %s\n", token)
+    a.handler.Handle(w, r)
+}
+
+// Rate limiting middleware
+type RateLimitDecorator struct {
+    handler    Handler
+    requests   map[string][]time.Time
+    maxReqs    int
+    timeWindow time.Duration
+}
+
+func NewRateLimitDecorator(handler Handler, maxReqs int, timeWindow time.Duration) Handler {
+    return &RateLimitDecorator{
+        handler:    handler,
+        requests:   make(map[string][]time.Time),
+        maxReqs:    maxReqs,
+        timeWindow: timeWindow,
+    }
+}
+
+func (r *RateLimitDecorator) Handle(w http.ResponseWriter, req *http.Request) {
+    clientIP := req.RemoteAddr
+    now := time.Now()
+
+    // Nettoyer les anciennes requêtes
+    if times, exists := r.requests[clientIP]; exists {
+        validTimes := make([]time.Time, 0)
+        for _, t := range times {
+            if now.Sub(t) < r.timeWindow {
+                validTimes = append(validTimes, t)
+            }
+        }
+        r.requests[clientIP] = validTimes
+    }
+
+    // Vérifier la limite
+    if len(r.requests[clientIP]) >= r.maxReqs {
+        http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
+        return
+    }
+
+    // Ajouter la requête actuelle
+    r.requests[clientIP] = append(r.requests[clientIP], now)
+
+    fmt.Printf("🚦 Rate limit: %d/%d requests for %s\n",
+        len(r.requests[clientIP]), r.maxReqs, clientIP)
+
+    r.handler.Handle(w, req)
+}
+
+// CORS middleware
+type CORSDecorator struct {
+    handler Handler
+    origins []string
+}
+
+func NewCORSDecorator(handler Handler, allowedOrigins []string) Handler {
+    return &CORSDecorator{
+        handler: handler,
+        origins: allowedOrigins,
+    }
+}
+
+func (c *CORSDecorator) Handle(w http.ResponseWriter, r *http.Request) {
+    origin := r.Header.Get("Origin")
+
+    // Vérifier si l'origine est autorisée
+    allowed := false
+    for _, allowedOrigin := range c.origins {
+        if origin == allowedOrigin || allowedOrigin == "*" {
+            allowed = true
+            break
+        }
+    }
+
+    if allowed {
+        w.Header().Set("Access-Control-Allow-Origin", origin)
+        w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        fmt.Printf("🌐 CORS: Origin %s allowed\n", origin)
+    } else {
+        fmt.Printf("🚫 CORS: Origin %s blocked\n", origin)
+    }
+
+    if r.Method == "OPTIONS" {
+        w.WriteHeader(http.StatusOK)
+        return
+    }
+
+    c.handler.Handle(w, r)
+}
+
+// Adapter pour http.HandlerFunc
+func AdaptHandler(handler Handler) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        handler.Handle(w, r)
+    }
+}
+
+func main() {
+    // Logger
+    logger := log.New(log.Writer(), "[HTTP] ", log.LstdFlags)
+
+    // Handler de base
+    baseHandler := BaseHandler{}
+
+    // Application des decorators (ordre important!)
+    decoratedHandler := NewLoggingDecorator(
+        NewRateLimitDecorator(
+            NewAuthDecorator(
+                NewCORSDecorator(
+                    baseHandler,
+                    []string{"http://localhost:3000", "https://app.example.com"},
+                ),
+            ),
+            5,                // 5 requêtes max
+            1*time.Minute,    // par minute
+        ),
+        logger,
+    )
+
+    // Routes
+    http.HandleFunc("/api/protected", AdaptHandler(decoratedHandler))
+
+    // Route publique (sans authentication)
+    publicHandler := NewLoggingDecorator(
+        NewRateLimitDecorator(
+            NewCORSDecorator(
+                baseHandler,
+                []string{"*"},
+            ),
+            10,               // 10 requêtes max
+            1*time.Minute,    // par minute
+        ),
+        logger,
+    )
+
+    http.HandleFunc("/api/public", AdaptHandler(publicHandler))
+
+    fmt.Println("🚀 Serveur démarré sur http://localhost:8080")
+    fmt.Println("\nEndpoints disponibles:")
+    fmt.Println("  GET http://localhost:8080/api/public")
+    fmt.Println("  GET http://localhost:8080/api/protected (nécessite: Authorization: Bearer valid-token)")
+    fmt.Println("\nTest avec curl:")
+    fmt.Println("  curl http://localhost:8080/api/public")
+    fmt.Println("  curl -H 'Authorization: Bearer valid-token' http://localhost:8080/api/protected")
+
+    log.Fatal(http.ListenAndServe(":8080", nil))
+}
+```
+
+## Prochaine étape
+
+Excellent ! Vous maîtrisez maintenant :
+
+- ✅ Patterns créationnels (Singleton, Factory, Builder)
+- ✅ Patterns comportementaux (Strategy, Observer)
+- ✅ Patterns structurels (Decorator)
+- ✅ Implémentations idiomatiques Go
+- ✅ Exemples pratiques et réalistes
+
+---
+
+> **💡 Astuce** : En Go, préférez la composition et les interfaces simples. Les patterns doivent rester naturels et ne pas complexifier inutilement le code !
