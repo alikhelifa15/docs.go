@@ -99,6 +99,12 @@
           "description": "Polymorphisme et composition"
         },
         {
+          "title": "Génériques",
+          "href": "/generics",
+          "icon": "code",
+          "description": "Types et fonctions génériques (1.18+)"
+        },
+        {
           "title": "Gestion d'erreurs",
           "href": "/gestion-erreurs",
           "icon": "alert-triangle",
