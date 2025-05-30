@@ -1,0 +1,1006 @@
+---
+title: Réflexion
+description: Introspection et manipulation de types à l'exécution en Go
+---
+
+# Réflexion en Go
+
+La réflexion permet d'inspecter et de manipuler les types et valeurs à l'exécution. C'est un outil puissant mais à utiliser avec parcimonie.
+
+## Concepts de base
+
+### Package reflect
+
+Le package `reflect` fournit deux types principaux : `Type` et `Value`.
+
+```go
+package main
+
+import (
+    "fmt"
+    "reflect"
+)
+
+func main() {
+    // Différents types de données
+    var i int = 42
+    var s string = "Hello"
+    var f float64 = 3.14
+    var slice []int = []int{1, 2, 3}
+
+    // Inspection des types
+    fmt.Printf("Type de i: %v\n", reflect.TypeOf(i))
+    fmt.Printf("Type de s: %v\n", reflect.TypeOf(s))
+    fmt.Printf("Type de f: %v\n", reflect.TypeOf(f))
+    fmt.Printf("Type de slice: %v\n", reflect.TypeOf(slice))
+
+    // Inspection des valeurs
+    fmt.Printf("Valeur de i: %v\n", reflect.ValueOf(i))
+    fmt.Printf("Valeur de s: %v\n", reflect.ValueOf(s))
+    fmt.Printf("Valeur de f: %v\n", reflect.ValueOf(f))
+    fmt.Printf("Valeur de slice: %v\n", reflect.ValueOf(slice))
+}
+```
+
+### Type vs Value
+
+```go
+package main
+
+import (
+    "fmt"
+    "reflect"
+)
+
+type Person struct {
+    Name string
+    Age  int
+}
+
+func analyzeType(v interface{}) {
+    t := reflect.TypeOf(v)
+    val := reflect.ValueOf(v)
+
+    fmt.Printf("=== Analyse de %T ===\n", v)
+
+    // Informations sur le type
+    fmt.Printf("Type: %v\n", t)
+    fmt.Printf("Kind: %v\n", t.Kind())
+    fmt.Printf("String: %s\n", t.String())
+
+    // Informations sur la valeur
+    fmt.Printf("Value: %v\n", val)
+    fmt.Printf("Type depuis Value: %v\n", val.Type())
+    fmt.Printf("Kind depuis Value: %v\n", val.Kind())
+    fmt.Printf("Interface: %v\n", val.Interface())
+
+    fmt.Println()
+}
+
+func main() {
+    analyzeType(42)
+    analyzeType("Hello")
+    analyzeType([]int{1, 2, 3})
+    analyzeType(Person{Name: "Alice", Age: 25})
+    analyzeType(&Person{Name: "Bob", Age: 30})
+}
+```
+
+## Inspection de structures
+
+### Analyse des champs
+
+```go
+package main
+
+import (
+    "fmt"
+    "reflect"
+)
+
+type Product struct {
+    ID          int     `json:"id" validate:"required"`
+    Name        string  `json:"name" validate:"required,min=2"`
+    Price       float64 `json:"price" validate:"min=0"`
+    Description string  `json:"description,omitempty"`
+    Tags        []string `json:"tags"`
+}
+
+func inspectStruct(v interface{}) {
+    t := reflect.TypeOf(v)
+    val := reflect.ValueOf(v)
+
+    // Gérer les pointeurs
+    if t.Kind() == reflect.Ptr {
+        t = t.Elem()
+        val = val.Elem()
+    }
+
+    if t.Kind() != reflect.Struct {
+        fmt.Printf("%v n'est pas une structure\n", t)
+        return
+    }
+
+    fmt.Printf("=== Structure %s ===\n", t.Name())
+    fmt.Printf("Nombre de champs: %d\n\n", t.NumField())
+
+    for i := 0; i < t.NumField(); i++ {
+        field := t.Field(i)
+        fieldValue := val.Field(i)
+
+        fmt.Printf("Champ %d:\n", i)
+        fmt.Printf("  Nom: %s\n", field.Name)
+        fmt.Printf("  Type: %v\n", field.Type)
+        fmt.Printf("  Valeur: %v\n", fieldValue.Interface())
+        fmt.Printf("  Tag json: %q\n", field.Tag.Get("json"))
+        fmt.Printf("  Tag validate: %q\n", field.Tag.Get("validate"))
+        fmt.Printf("  Exporté: %t\n", field.IsExported())
+        fmt.Println()
+    }
+}
+
+func main() {
+    product := Product{
+        ID:          1,
+        Name:        "Laptop",
+        Price:       999.99,
+        Description: "Gaming laptop",
+        Tags:        []string{"gaming", "computer"},
+    }
+
+    inspectStruct(product)
+    inspectStruct(&product) // Test avec pointeur
+}
+```
+
+### Recherche de champs par nom
+
+```go
+package main
+
+import (
+    "fmt"
+    "reflect"
+)
+
+type User struct {
+    ID       int    `json:"id"`
+    Username string `json:"username"`
+    Email    string `json:"email"`
+    password string // Non exporté
+}
+
+func getFieldByName(v interface{}, fieldName string) (interface{}, bool) {
+    val := reflect.ValueOf(v)
+
+    // Gérer les pointeurs
+    if val.Kind() == reflect.Ptr {
+        val = val.Elem()
+    }
+
+    if val.Kind() != reflect.Struct {
+        return nil, false
+    }
+
+    fieldValue := val.FieldByName(fieldName)
+    if !fieldValue.IsValid() {
+        return nil, false
+    }
+
+    // Vérifier si le champ est exporté
+    if !fieldValue.CanInterface() {
+        return nil, false
+    }
+
+    return fieldValue.Interface(), true
+}
+
+func getFieldByTag(v interface{}, tagKey, tagValue string) (interface{}, bool) {
+    t := reflect.TypeOf(v)
+    val := reflect.ValueOf(v)
+
+    // Gérer les pointeurs
+    if t.Kind() == reflect.Ptr {
+        t = t.Elem()
+        val = val.Elem()
+    }
+
+    if t.Kind() != reflect.Struct {
+        return nil, false
+    }
+
+    for i := 0; i < t.NumField(); i++ {
+        field := t.Field(i)
+        if field.Tag.Get(tagKey) == tagValue {
+            fieldValue := val.Field(i)
+            if fieldValue.CanInterface() {
+                return fieldValue.Interface(), true
+            }
+        }
+    }
+
+    return nil, false
+}
+
+func main() {
+    user := User{
+        ID:       1,
+        Username: "alice",
+        Email:    "alice@example.com",
+        password: "secret123",
+    }
+
+    // Recherche par nom
+    if value, found := getFieldByName(user, "Username"); found {
+        fmt.Printf("Username: %v\n", value)
+    }
+
+    if value, found := getFieldByName(user, "password"); found {
+        fmt.Printf("Password: %v\n", value)
+    } else {
+        fmt.Println("Password: non accessible (champ privé)")
+    }
+
+    // Recherche par tag JSON
+    if value, found := getFieldByTag(user, "json", "email"); found {
+        fmt.Printf("Email (via tag): %v\n", value)
+    }
+}
+```
+
+## Manipulation de valeurs
+
+### Modification de champs
+
+```go
+package main
+
+import (
+    "fmt"
+    "reflect"
+)
+
+type Settings struct {
+    Debug    bool
+    MaxUsers int
+    AppName  string
+}
+
+func setField(v interface{}, fieldName string, newValue interface{}) error {
+    val := reflect.ValueOf(v)
+
+    // Doit être un pointeur pour modifier
+    if val.Kind() != reflect.Ptr {
+        return fmt.Errorf("la valeur doit être un pointeur")
+    }
+
+    val = val.Elem()
+    if val.Kind() != reflect.Struct {
+        return fmt.Errorf("la valeur doit pointer vers une structure")
+    }
+
+    fieldValue := val.FieldByName(fieldName)
+    if !fieldValue.IsValid() {
+        return fmt.Errorf("champ '%s' non trouvé", fieldName)
+    }
+
+    if !fieldValue.CanSet() {
+        return fmt.Errorf("champ '%s' non modifiable", fieldName)
+    }
+
+    newVal := reflect.ValueOf(newValue)
+    if fieldValue.Type() != newVal.Type() {
+        return fmt.Errorf("type incompatible: attendu %v, reçu %v",
+            fieldValue.Type(), newVal.Type())
+    }
+
+    fieldValue.Set(newVal)
+    return nil
+}
+
+func updateFromMap(v interface{}, updates map[string]interface{}) []error {
+    var errors []error
+
+    for fieldName, newValue := range updates {
+        if err := setField(v, fieldName, newValue); err != nil {
+            errors = append(errors, err)
+        }
+    }
+
+    return errors
+}
+
+func main() {
+    settings := Settings{
+        Debug:    false,
+        MaxUsers: 100,
+        AppName:  "MyApp",
+    }
+
+    fmt.Printf("Avant: %+v\n", settings)
+
+    // Modification individuelle
+    err := setField(&settings, "Debug", true)
+    if err != nil {
+        fmt.Printf("Erreur: %v\n", err)
+    }
+
+    // Modification par lot
+    updates := map[string]interface{}{
+        "MaxUsers": 200,
+        "AppName":  "NewApp",
+    }
+
+    errors := updateFromMap(&settings, updates)
+    if len(errors) > 0 {
+        fmt.Printf("Erreurs: %v\n", errors)
+    }
+
+    fmt.Printf("Après: %+v\n", settings)
+
+    // Test d'erreur - type incompatible
+    err = setField(&settings, "MaxUsers", "invalid")
+    if err != nil {
+        fmt.Printf("Erreur attendue: %v\n", err)
+    }
+}
+```
+
+### Création dynamique de structures
+
+```go
+package main
+
+import (
+    "fmt"
+    "reflect"
+)
+
+func createStruct(fields map[string]reflect.Type) reflect.Type {
+    var structFields []reflect.StructField
+
+    for name, fieldType := range fields {
+        structFields = append(structFields, reflect.StructField{
+            Name: name,
+            Type: fieldType,
+            Tag:  reflect.StructTag(fmt.Sprintf(`json:"%s"`, name)),
+        })
+    }
+
+    return reflect.StructOf(structFields)
+}
+
+func createInstance(structType reflect.Type, values map[string]interface{}) interface{} {
+    instance := reflect.New(structType).Elem()
+
+    for name, value := range values {
+        field := instance.FieldByName(name)
+        if field.IsValid() && field.CanSet() {
+            field.Set(reflect.ValueOf(value))
+        }
+    }
+
+    return instance.Interface()
+}
+
+func main() {
+    // Définir les champs dynamiquement
+    fields := map[string]reflect.Type{
+        "ID":   reflect.TypeOf(0),
+        "Name": reflect.TypeOf(""),
+        "Age":  reflect.TypeOf(0),
+    }
+
+    // Créer le type de structure
+    dynamicType := createStruct(fields)
+    fmt.Printf("Type créé: %v\n", dynamicType)
+
+    // Créer une instance
+    values := map[string]interface{}{
+        "ID":   1,
+        "Name": "Alice",
+        "Age":  25,
+    }
+
+    instance := createInstance(dynamicType, values)
+    fmt.Printf("Instance: %+v\n", instance)
+
+    // Analyser l'instance créée
+    v := reflect.ValueOf(instance)
+    t := reflect.TypeOf(instance)
+
+    fmt.Println("\nAnalyse de l'instance:")
+    for i := 0; i < v.NumField(); i++ {
+        field := t.Field(i)
+        value := v.Field(i)
+        fmt.Printf("  %s: %v (tag: %s)\n",
+            field.Name, value.Interface(), field.Tag)
+    }
+}
+```
+
+## Cas d'usage pratiques
+
+### Validation automatique
+
+```go
+package main
+
+import (
+    "fmt"
+    "reflect"
+    "strconv"
+    "strings"
+)
+
+type ValidationError struct {
+    Field   string
+    Message string
+}
+
+func (e ValidationError) Error() string {
+    return fmt.Sprintf("validation error on field '%s': %s", e.Field, e.Message)
+}
+
+func validateStruct(v interface{}) []ValidationError {
+    var errors []ValidationError
+
+    val := reflect.ValueOf(v)
+    t := reflect.TypeOf(v)
+
+    // Gérer les pointeurs
+    if t.Kind() == reflect.Ptr {
+        t = t.Elem()
+        val = val.Elem()
+    }
+
+    if t.Kind() != reflect.Struct {
+        return []ValidationError{{Field: "root", Message: "not a struct"}}
+    }
+
+    for i := 0; i < t.NumField(); i++ {
+        field := t.Field(i)
+        fieldValue := val.Field(i)
+
+        if !fieldValue.CanInterface() {
+            continue // Champ privé
+        }
+
+        validateTag := field.Tag.Get("validate")
+        if validateTag == "" {
+            continue
+        }
+
+        rules := strings.Split(validateTag, ",")
+        for _, rule := range rules {
+            if err := validateRule(field.Name, fieldValue, rule); err != nil {
+                errors = append(errors, *err)
+            }
+        }
+    }
+
+    return errors
+}
+
+func validateRule(fieldName string, value reflect.Value, rule string) *ValidationError {
+    rule = strings.TrimSpace(rule)
+
+    switch {
+    case rule == "required":
+        if isZeroValue(value) {
+            return &ValidationError{Field: fieldName, Message: "is required"}
+        }
+
+    case strings.HasPrefix(rule, "min="):
+        minStr := strings.TrimPrefix(rule, "min=")
+        min, err := strconv.Atoi(minStr)
+        if err != nil {
+            return &ValidationError{Field: fieldName, Message: "invalid min rule"}
+        }
+
+        switch value.Kind() {
+        case reflect.String:
+            if len(value.String()) < min {
+                return &ValidationError{Field: fieldName,
+                    Message: fmt.Sprintf("must be at least %d characters", min)}
+            }
+        case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+            if value.Int() < int64(min) {
+                return &ValidationError{Field: fieldName,
+                    Message: fmt.Sprintf("must be at least %d", min)}
+            }
+        }
+
+    case strings.HasPrefix(rule, "max="):
+        maxStr := strings.TrimPrefix(rule, "max=")
+        max, err := strconv.Atoi(maxStr)
+        if err != nil {
+            return &ValidationError{Field: fieldName, Message: "invalid max rule"}
+        }
+
+        switch value.Kind() {
+        case reflect.String:
+            if len(value.String()) > max {
+                return &ValidationError{Field: fieldName,
+                    Message: fmt.Sprintf("must be at most %d characters", max)}
+            }
+        case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+            if value.Int() > int64(max) {
+                return &ValidationError{Field: fieldName,
+                    Message: fmt.Sprintf("must be at most %d", max)}
+            }
+        }
+    }
+
+    return nil
+}
+
+func isZeroValue(value reflect.Value) bool {
+    switch value.Kind() {
+    case reflect.String:
+        return value.String() == ""
+    case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+        return value.Int() == 0
+    case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+        return value.Uint() == 0
+    case reflect.Float32, reflect.Float64:
+        return value.Float() == 0
+    case reflect.Bool:
+        return !value.Bool()
+    case reflect.Slice, reflect.Map, reflect.Array:
+        return value.Len() == 0
+    case reflect.Ptr, reflect.Interface:
+        return value.IsNil()
+    }
+    return false
+}
+
+// Structures de test
+type RegisterRequest struct {
+    Username string `validate:"required,min=3,max=20" json:"username"`
+    Email    string `validate:"required,min=5" json:"email"`
+    Age      int    `validate:"min=13,max=120" json:"age"`
+    Password string `validate:"required,min=8" json:"password"`
+}
+
+func main() {
+    // Test avec données valides
+    validRequest := RegisterRequest{
+        Username: "alice",
+        Email:    "alice@example.com",
+        Age:      25,
+        Password: "securepassword",
+    }
+
+    fmt.Println("=== Validation données valides ===")
+    errors := validateStruct(validRequest)
+    if len(errors) == 0 {
+        fmt.Println("✅ Validation réussie")
+    } else {
+        for _, err := range errors {
+            fmt.Printf("❌ %v\n", err)
+        }
+    }
+
+    // Test avec données invalides
+    invalidRequest := RegisterRequest{
+        Username: "ab",        // Trop court
+        Email:    "",          // Requis
+        Age:      12,          // Trop jeune
+        Password: "123",       // Trop court
+    }
+
+    fmt.Println("\n=== Validation données invalides ===")
+    errors = validateStruct(invalidRequest)
+    if len(errors) == 0 {
+        fmt.Println("✅ Validation réussie")
+    } else {
+        for _, err := range errors {
+            fmt.Printf("❌ %v\n", err)
+        }
+    }
+}
+```
+
+### JSON personnalisé avec réflexion
+
+```go
+package main
+
+import (
+    "fmt"
+    "reflect"
+    "strconv"
+    "strings"
+)
+
+func structToMap(v interface{}) (map[string]interface{}, error) {
+    result := make(map[string]interface{})
+
+    val := reflect.ValueOf(v)
+    t := reflect.TypeOf(v)
+
+    // Gérer les pointeurs
+    if t.Kind() == reflect.Ptr {
+        t = t.Elem()
+        val = val.Elem()
+    }
+
+    if t.Kind() != reflect.Struct {
+        return nil, fmt.Errorf("expected struct, got %v", t.Kind())
+    }
+
+    for i := 0; i < t.NumField(); i++ {
+        field := t.Field(i)
+        fieldValue := val.Field(i)
+
+        if !fieldValue.CanInterface() {
+            continue // Champ privé
+        }
+
+        // Utiliser le tag JSON ou le nom du champ
+        jsonTag := field.Tag.Get("json")
+        fieldName := field.Name
+
+        if jsonTag != "" {
+            parts := strings.Split(jsonTag, ",")
+            if parts[0] != "" {
+                fieldName = parts[0]
+            }
+
+            // Vérifier omitempty
+            if len(parts) > 1 && parts[1] == "omitempty" && isZeroValue(fieldValue) {
+                continue
+            }
+        }
+
+        result[fieldName] = fieldValue.Interface()
+    }
+
+    return result, nil
+}
+
+func mapToStruct(data map[string]interface{}, target interface{}) error {
+    val := reflect.ValueOf(target)
+
+    if val.Kind() != reflect.Ptr {
+        return fmt.Errorf("target must be a pointer")
+    }
+
+    val = val.Elem()
+    t := val.Type()
+
+    if val.Kind() != reflect.Struct {
+        return fmt.Errorf("target must point to a struct")
+    }
+
+    for i := 0; i < t.NumField(); i++ {
+        field := t.Field(i)
+        fieldValue := val.Field(i)
+
+        if !fieldValue.CanSet() {
+            continue
+        }
+
+        // Trouver la clé dans la map
+        jsonTag := field.Tag.Get("json")
+        fieldName := field.Name
+
+        if jsonTag != "" {
+            parts := strings.Split(jsonTag, ",")
+            if parts[0] != "" {
+                fieldName = parts[0]
+            }
+        }
+
+        if value, exists := data[fieldName]; exists {
+            if err := setFieldValue(fieldValue, value); err != nil {
+                return fmt.Errorf("error setting field %s: %v", field.Name, err)
+            }
+        }
+    }
+
+    return nil
+}
+
+func setFieldValue(fieldValue reflect.Value, value interface{}) error {
+    valueReflect := reflect.ValueOf(value)
+
+    // Conversion de type si nécessaire
+    if valueReflect.Type() != fieldValue.Type() {
+        // Tentative de conversion pour les types numériques
+        switch fieldValue.Kind() {
+        case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+            if convertedValue, ok := convertToInt(value); ok {
+                fieldValue.SetInt(convertedValue)
+                return nil
+            }
+        case reflect.String:
+            if convertedValue, ok := convertToString(value); ok {
+                fieldValue.SetString(convertedValue)
+                return nil
+            }
+        case reflect.Float32, reflect.Float64:
+            if convertedValue, ok := convertToFloat(value); ok {
+                fieldValue.SetFloat(convertedValue)
+                return nil
+            }
+        }
+
+        return fmt.Errorf("cannot convert %T to %v", value, fieldValue.Type())
+    }
+
+    fieldValue.Set(valueReflect)
+    return nil
+}
+
+func convertToInt(value interface{}) (int64, bool) {
+    switch v := value.(type) {
+    case int:
+        return int64(v), true
+    case int32:
+        return int64(v), true
+    case int64:
+        return v, true
+    case float64:
+        return int64(v), true
+    case string:
+        if i, err := strconv.ParseInt(v, 10, 64); err == nil {
+            return i, true
+        }
+    }
+    return 0, false
+}
+
+func convertToString(value interface{}) (string, bool) {
+    switch v := value.(type) {
+    case string:
+        return v, true
+    case int, int32, int64:
+        return fmt.Sprintf("%v", v), true
+    case float64:
+        return fmt.Sprintf("%g", v), true
+    }
+    return "", false
+}
+
+func convertToFloat(value interface{}) (float64, bool) {
+    switch v := value.(type) {
+    case float64:
+        return v, true
+    case float32:
+        return float64(v), true
+    case int, int32, int64:
+        return float64(reflect.ValueOf(v).Int()), true
+    case string:
+        if f, err := strconv.ParseFloat(v, 64); err == nil {
+            return f, true
+        }
+    }
+    return 0, false
+}
+
+type Config struct {
+    AppName    string  `json:"app_name"`
+    Debug      bool    `json:"debug"`
+    Port       int     `json:"port"`
+    MaxMemory  float64 `json:"max_memory,omitempty"`
+    SecretKey  string  `json:"secret_key,omitempty"`
+}
+
+func main() {
+    // Struct vers Map
+    config := Config{
+        AppName:   "MyApp",
+        Debug:     true,
+        Port:      8080,
+        MaxMemory: 512.0,
+    }
+
+    fmt.Println("=== Struct vers Map ===")
+    configMap, err := structToMap(config)
+    if err != nil {
+        fmt.Printf("Erreur: %v\n", err)
+        return
+    }
+
+    fmt.Printf("Config Map: %+v\n", configMap)
+
+    // Map vers Struct
+    fmt.Println("\n=== Map vers Struct ===")
+    dataMap := map[string]interface{}{
+        "app_name":   "NewApp",
+        "debug":      false,
+        "port":       "9090", // String qui sera converti en int
+        "max_memory": 1024.5,
+    }
+
+    var newConfig Config
+    err = mapToStruct(dataMap, &newConfig)
+    if err != nil {
+        fmt.Printf("Erreur: %v\n", err)
+        return
+    }
+
+    fmt.Printf("New Config: %+v\n", newConfig)
+}
+```
+
+## Limitations et bonnes pratiques
+
+### Performances
+
+```go
+package main
+
+import (
+    "fmt"
+    "reflect"
+    "testing"
+    "time"
+)
+
+type User struct {
+    ID   int
+    Name string
+    Age  int
+}
+
+// Accès direct
+func directAccess(user *User) string {
+    return user.Name
+}
+
+// Accès par réflexion
+func reflectAccess(user interface{}) string {
+    val := reflect.ValueOf(user).Elem()
+    nameField := val.FieldByName("Name")
+    return nameField.String()
+}
+
+// Benchmark comparatif
+func BenchmarkDirectAccess(b *testing.B) {
+    user := &User{ID: 1, Name: "Alice", Age: 25}
+
+    b.ResetTimer()
+    for i := 0; i < b.N; i++ {
+        _ = directAccess(user)
+    }
+}
+
+func BenchmarkReflectAccess(b *testing.B) {
+    user := &User{ID: 1, Name: "Alice", Age: 25}
+
+    b.ResetTimer()
+    for i := 0; i < b.N; i++ {
+        _ = reflectAccess(user)
+    }
+}
+
+// Test de performance simple
+func comparePerformance() {
+    user := &User{ID: 1, Name: "Alice", Age: 25}
+    iterations := 1000000
+
+    // Test accès direct
+    start := time.Now()
+    for i := 0; i < iterations; i++ {
+        _ = directAccess(user)
+    }
+    directDuration := time.Since(start)
+
+    // Test accès par réflexion
+    start = time.Now()
+    for i := 0; i < iterations; i++ {
+        _ = reflectAccess(user)
+    }
+    reflectDuration := time.Since(start)
+
+    fmt.Printf("Accès direct: %v\n", directDuration)
+    fmt.Printf("Accès réflexion: %v\n", reflectDuration)
+    fmt.Printf("Ratio: %.2fx plus lent\n",
+        float64(reflectDuration.Nanoseconds())/float64(directDuration.Nanoseconds()))
+}
+
+func main() {
+    fmt.Println("=== Comparaison de performance ===")
+    comparePerformance()
+
+    fmt.Println("\n💡 Conseils:")
+    fmt.Println("- La réflexion est 10-100x plus lente")
+    fmt.Println("- Utilisez-la pour l'initialisation, pas les hot paths")
+    fmt.Println("- Cachez les résultats de réflexion quand possible")
+    fmt.Println("- Préférez la génération de code pour les performances critiques")
+}
+```
+
+### Quand éviter la réflexion
+
+```go
+package main
+
+import (
+    "fmt"
+    "reflect"
+)
+
+// ❌ Évitez : Réflexion pour des opérations simples
+func badExample(values []interface{}) {
+    for _, v := range values {
+        val := reflect.ValueOf(v)
+        switch val.Kind() {
+        case reflect.String:
+            fmt.Printf("String: %s\n", val.String())
+        case reflect.Int:
+            fmt.Printf("Int: %d\n", val.Int())
+        }
+    }
+}
+
+// ✅ Mieux : Type assertion
+func goodExample(values []interface{}) {
+    for _, v := range values {
+        switch v := v.(type) {
+        case string:
+            fmt.Printf("String: %s\n", v)
+        case int:
+            fmt.Printf("Int: %d\n", v)
+        }
+    }
+}
+
+// ❌ Évitez : Réflexion pour des types connus
+func badFieldAccess(user interface{}) string {
+    val := reflect.ValueOf(user)
+    if val.Kind() == reflect.Ptr {
+        val = val.Elem()
+    }
+    nameField := val.FieldByName("Name")
+    return nameField.String()
+}
+
+// ✅ Mieux : Interface ou type assertion
+type Named interface {
+    GetName() string
+}
+
+func goodFieldAccess(user Named) string {
+    return user.GetName()
+}
+
+func main() {
+    fmt.Println("=== Alternatives à la réflexion ===")
+
+    values := []interface{}{"hello", 42, "world", 100}
+
+    fmt.Println("Type assertions:")
+    goodExample(values)
+
+    fmt.Println("\n💡 Utilisez la réflexion uniquement pour:")
+    fmt.Println("- Bibliothèques génériques (JSON, ORM)")
+    fmt.Println("- Configuration dynamique")
+    fmt.Println("- Frameworks et middlewares")
+    fmt.Println("- Introspection de debugging")
+    fmt.Println("\n❌ Évitez la réflexion pour:")
+    fmt.Println("- Code métier standard")
+    fmt.Println("- Boucles intensives")
+    fmt.Println("- Opérations simples sur types connus")
+}
+```
+
+## Prochaine étape
+
+Excellent ! Vous maîtrisez maintenant :
+
+- ✅ Inspection de types avec `reflect.TypeOf()`
+- ✅ Manipulation de valeurs avec `reflect.ValueOf()`
+- ✅ Analyse de structures et tags
+- ✅ Validation automatique
+- ✅ Sérialisation personnalisée
+- ✅ Limitations et alternatives
+
+👉 **[Explorons les Design Patterns](/design-patterns)**
+
+---
+
+> **💡 Astuce** : La réflexion est puissante mais coûteuse. Utilisez-la pour l'initialisation et les bibliothèques génériques, pas pour le code métier quotidien !

@@ -99,6 +99,12 @@
           "description": "Polymorphisme et composition"
         },
         {
+          "title": "Réflexion",
+          "href": "/reflexion",
+          "icon": "search",
+          "description": "Introspection et manipulation de types"
+        },
+        {
           "title": "Génériques",
           "href": "/generics",
           "icon": "code",
