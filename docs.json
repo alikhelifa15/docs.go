@@ -98,12 +98,7 @@
           "icon": "layers",
           "description": "Polymorphisme et composition"
         },
-        {
-          "title": "Réflexion",
-          "href": "/reflexion",
-          "icon": "search",
-          "description": "Introspection et manipulation de types"
-        },
+
         {
           "title": "Génériques",
           "href": "/generics",
@@ -111,10 +106,10 @@
           "description": "Types et fonctions génériques (1.18+)"
         },
         {
-          "title": "Gestion d'erreurs",
-          "href": "/gestion-erreurs",
-          "icon": "alert-triangle",
-          "description": "Patterns et bonnes pratiques"
+          "title": "Réflexion",
+          "href": "/reflexion",
+          "icon": "search",
+          "description": "Introspection et manipulation de types"
         },
         {
           "title": "Design Patterns",
@@ -122,6 +117,13 @@
           "icon": "puzzle",
           "description": "Patterns de conception idiomatiques"
         },
+        {
+          "title": "Gestion d'erreurs",
+          "href": "/gestion-erreurs",
+          "icon": "alert-triangle",
+          "description": "Patterns et bonnes pratiques"
+        },
+
         {
           "title": "Tests",
           "href": "/tests",
